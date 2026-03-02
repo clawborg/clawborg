@@ -1,0 +1,35 @@
+# Rust
+target/
+
+# Environment secrets — NEVER commit
+.env
+.env.local
+.env.production
+*.env
+fixtures/**/.env
+
+# OpenClaw auth (contains OAuth tokens)
+auth-profiles.json
+
+# Node / React
+web/node_modules/
+web/dist/
+web/.env
+web/.env.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Backups created by ClawBorg editor
+*.md.bak

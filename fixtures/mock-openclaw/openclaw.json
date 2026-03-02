@@ -1,0 +1,108 @@
+{
+  "identity": {
+    "name": "Archie",
+    "theme": "helpful lobster",
+    "emoji": "🦞"
+  },
+  "agent": {
+    "workspace": "~/.openclaw/workspace",
+    "model": {
+      "primary": "anthropic/claude-sonnet-4-5",
+      "fallbacks": ["openrouter/deepseek/deepseek-chat-v3-0324"]
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "anthropic/claude-sonnet-4-5"
+      }
+    },
+    "list": [
+      {
+        "id": "main",
+        "name": "Archie",
+        "default": true,
+        "workspace": "./workspace"
+      },
+      {
+        "id": "coder",
+        "name": "Coder",
+        "workspace": "./workspace-coder",
+        "model": {
+          "primary": "anthropic/claude-sonnet-4-5"
+        }
+      },
+      {
+        "id": "writer",
+        "name": "Writer",
+        "workspace": "./workspace-writer",
+        "model": {
+          "primary": "openrouter/deepseek/deepseek-chat-v3-0324"
+        }
+      }
+    ]
+  },
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "botToken": "${TELEGRAM_BOT_TOKEN}",
+      "allowFrom": ["123456789"]
+    },
+    "whatsapp": {
+      "enabled": false,
+      "allowFrom": ["+15555550123"]
+    }
+  },
+  "gateway": {
+    "port": 18789,
+    "bind": "loopback"
+  },
+  "session": {
+    "scope": "per-sender",
+    "reset": {
+      "mode": "daily",
+      "atHour": 4,
+      "idleMinutes": 60
+    }
+  },
+  "memory": {
+    "backend": "qmd"
+  },
+  "crons": [
+    {
+      "schedule": "*/30 * * * *",
+      "agent": "main",
+      "task": "Heartbeat check",
+      "enabled": true,
+      "deleteAfterRun": false
+    },
+    {
+      "schedule": "0 8 * * *",
+      "agent": "coder",
+      "task": "Check for new PRs and run automated code review",
+      "enabled": true,
+      "deleteAfterRun": true
+    },
+    {
+      "schedule": "0 7 * * *",
+      "agent": "writer",
+      "task": "Check content calendar and prepare scheduled posts",
+      "enabled": true,
+      "deleteAfterRun": false
+    },
+    {
+      "schedule": "0 6 * * *",
+      "agent": "main",
+      "task": "Daily memory extraction and consolidation",
+      "enabled": true,
+      "deleteAfterRun": true
+    },
+    {
+      "schedule": "0 22 * * 5",
+      "agent": "writer",
+      "task": "Generate weekly content performance report",
+      "enabled": false,
+      "deleteAfterRun": true
+    }
+  ]
+}

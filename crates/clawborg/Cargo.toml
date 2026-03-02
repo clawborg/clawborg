@@ -1,0 +1,57 @@
+[package]
+name = "clawborg"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description.workspace = true
+
+[[bin]]
+name = "clawborg"
+path = "src/main.rs"
+
+[dependencies]
+# Web framework
+axum = { version = "0.8", features = ["ws"] }
+axum-extra = { version = "0.10", features = ["typed-header"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "fs", "trace"] }
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Filesystem watching
+notify = "7"
+notify-debouncer-mini = "0.5"
+
+# CLI
+clap = { version = "4", features = ["derive", "env"] }
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Markdown rendering (for preview)
+pulldown-cmark = "0.12"
+
+# Error handling
+anyhow = "1"
+
+# Utilities
+chrono = { version = "0.4", features = ["serde"] }
+glob = "0.3"
+dirs = "6"
+uuid = { version = "1", features = ["v4"] }
+
+# WebSocket
+futures = "0.3"
+tokio-stream = "0.1"
+
+# Embedded frontend (single-binary distribution)
+rust-embed = "8"
+mime_guess = "2"
