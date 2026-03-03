@@ -45,6 +45,7 @@ function estimateCost(s: SessionSummary): number | null {
   return (
     (s.inputTokens / 1_000_000) * p.input +
     (s.outputTokens / 1_000_000) * p.output +
+    ((s.cacheWrite ?? 0) / 1_000_000) * p.input +
     ((s.cacheRead ?? 0) / 1_000_000) * p.cacheRead
   );
 }
@@ -155,7 +156,7 @@ function TokenRow({ label, value, dimmed }: { label: string; value: number; dimm
 function SessionDetail({ session }: { session: SessionSummary }) {
   const [rawOpen, setRawOpen] = useState(false);
   const cost = estimateCost(session);
-  const totalUsed = session.inputTokens + session.outputTokens;
+  const totalUsed = session.inputTokens + session.outputTokens + (session.cacheRead ?? 0) + (session.cacheWrite ?? 0);
 
   return (
     <div className="border-t border-gray-800 bg-gray-950/60 px-4 py-4 space-y-4 text-xs">
