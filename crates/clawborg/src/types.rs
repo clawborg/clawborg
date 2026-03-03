@@ -43,6 +43,22 @@ pub struct OpenClawConfig {
     pub memory: Option<serde_json::Value>,
     #[serde(default)]
     pub mcp: Option<serde_json::Value>,
+    #[serde(default)]
+    pub alerts: Option<AlertsConfig>,
+}
+
+/// ClawBorg-specific alert thresholds, read from the "alerts" key in openclaw.json.
+/// Example:
+///   "alerts": { "dailySpendThreshold": 50.0, "dailySpendWarning": 10.0 }
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct AlertsConfig {
+    /// Daily cost that triggers a critical alert (USD). Default: $20.
+    #[serde(default)]
+    pub daily_spend_threshold: Option<f64>,
+    /// Daily cost that triggers a warning alert (USD). Default: $5.
+    #[serde(default)]
+    pub daily_spend_warning: Option<f64>,
 }
 
 /// "agents" block — multi-agent or single with defaults

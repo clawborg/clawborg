@@ -38,10 +38,14 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
         }
     });
 
-    // Wait for either task to finish
+    // Abort handles let us cancel the other task without consuming the JoinHandles
+    // via select!. Without this, a disconnected client leaves its send_task running
+    // indefinitely, accumulating orphaned tasks and broadcast subscriptions.
+    let send_abort = send_task.abort_handle();
+    let recv_abort = recv_task.abort_handle();
     tokio::select! {
-        _ = send_task => {},
-        _ = recv_task => {},
+        _ = send_task => { recv_abort.abort(); },
+        _ = recv_task => { send_abort.abort(); },
     }
 
     tracing::info!("WebSocket client disconnected");

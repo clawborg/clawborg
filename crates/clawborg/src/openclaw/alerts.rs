@@ -1,22 +1,20 @@
 use crate::types::*;
 use chrono::Utc;
 
-/// Default daily cost threshold (USD) for triggering a warning
-const DAILY_COST_WARNING: f64 = 5.0;
-/// Default daily cost threshold (USD) for triggering a critical alert
-const DAILY_COST_CRITICAL: f64 = 20.0;
-
-/// Generate smart alerts from all available data
+/// Generate smart alerts from all available data.
+/// `alerts_config` is the optional `alerts` block from openclaw.json.
 pub fn generate_alerts(
     usage: &UsageSummary,
     crons: &[CronEntry],
     health_report: &HealthReport,
+    critical_threshold: f64,
+    warning_threshold: f64,
 ) -> Vec<Alert> {
     let mut alerts = Vec::new();
     let now = Utc::now().to_rfc3339();
 
     // ── Cost alerts ──
-    if usage.today_cost >= DAILY_COST_CRITICAL {
+    if usage.today_cost >= critical_threshold {
         alerts.push(Alert {
             id: "cost-critical".to_string(),
             severity: AlertSeverity::Critical,
@@ -24,11 +22,11 @@ pub fn generate_alerts(
             title: "High daily spend".to_string(),
             message: format!(
                 "Today's cost is ${:.2}, exceeding ${:.0} threshold",
-                usage.today_cost, DAILY_COST_CRITICAL
+                usage.today_cost, critical_threshold
             ),
             timestamp: now.clone(),
         });
-    } else if usage.today_cost >= DAILY_COST_WARNING {
+    } else if usage.today_cost >= warning_threshold {
         alerts.push(Alert {
             id: "cost-warning".to_string(),
             severity: AlertSeverity::Warning,
@@ -36,7 +34,7 @@ pub fn generate_alerts(
             title: "Elevated daily spend".to_string(),
             message: format!(
                 "Today's cost is ${:.2}, approaching ${:.0} threshold",
-                usage.today_cost, DAILY_COST_CRITICAL
+                usage.today_cost, critical_threshold
             ),
             timestamp: now.clone(),
         });

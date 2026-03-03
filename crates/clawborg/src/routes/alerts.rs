@@ -5,6 +5,24 @@ use axum::Json;
 use crate::openclaw::{alerts, config, cron, health, usage};
 use crate::types::*;
 
+const DEFAULT_CRITICAL: f64 = 20.0;
+const DEFAULT_WARNING: f64 = 5.0;
+
+fn resolve_thresholds(alerts_cfg: Option<&AlertsConfig>) -> (f64, f64) {
+    let critical = alerts_cfg
+        .and_then(|c| c.daily_spend_threshold)
+        .unwrap_or_else(|| {
+            eprintln!(
+                "[clawborg] alerts.dailySpendThreshold not configured, using default ${DEFAULT_CRITICAL}"
+            );
+            DEFAULT_CRITICAL
+        });
+    let warning = alerts_cfg
+        .and_then(|c| c.daily_spend_warning)
+        .unwrap_or(DEFAULT_WARNING);
+    (critical, warning)
+}
+
 /// GET /api/alerts — Get smart alerts
 pub async fn get_alerts(
     State(state): State<AppState>,
@@ -26,7 +44,14 @@ pub async fn get_alerts(
         agents: Vec::new(),
     });
 
-    let alert_list = alerts::generate_alerts(&usage_summary, &cron_list, &health_report);
+    let (critical_threshold, warning_threshold) = resolve_thresholds(cfg.alerts.as_ref());
+    let alert_list = alerts::generate_alerts(
+        &usage_summary,
+        &cron_list,
+        &health_report,
+        critical_threshold,
+        warning_threshold,
+    );
 
     Ok(Json(alert_list))
 }
