@@ -4,7 +4,7 @@
 
 ClawBorg gives you visibility into your [OpenClaw](https://openclaw.ai) installation — agents, workspaces, sessions, health, and config — from a single local dashboard.
 
-> **Status:** v0.2.0 released. See [CHANGELOG.md](./CHANGELOG.md) for details.
+> **Status:** v0.2.1 released. See [CHANGELOG.md](./CHANGELOG.md) for details.
 
 <p align="center">
   <img src="assets/screenshot-dashboard.png" width="800" alt="Agent Fleet Dashboard" />
