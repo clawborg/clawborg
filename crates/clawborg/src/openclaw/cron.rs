@@ -55,6 +55,8 @@ fn job_to_entry(job: &CronJobEntry) -> CronEntry {
         None
     };
 
+    let raw = serde_json::to_value(job).unwrap_or_default();
+
     CronEntry {
         id: job.id.clone(),
         schedule: schedule_str,
@@ -74,6 +76,7 @@ fn job_to_entry(job: &CronJobEntry) -> CronEntry {
         delivery_to: job.delivery.as_ref().and_then(|d| d.to.clone()),
         consecutive_errors: job.state.as_ref().map(|s| s.consecutive_errors),
         last_error: job.state.as_ref().and_then(|s| s.last_error.clone()),
+        raw,
     }
 }
 

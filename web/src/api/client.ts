@@ -61,7 +61,7 @@ export const fetchDirListing = (
   if (path) params.set("path", path);
   if (section) params.set("section", section);
   const qs = params.toString() ? `?${params}` : "";
-  return get<DirListing>(`/agents/${agentId}/browse${qs}`);
+  return get<DirListing>(`/agents/${agentId}/files${qs}`);
 };
 
 export const updateFile = (
