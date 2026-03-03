@@ -5,8 +5,6 @@ use chrono::Utc;
 const DAILY_COST_WARNING: f64 = 5.0;
 /// Default daily cost threshold (USD) for triggering a critical alert
 const DAILY_COST_CRITICAL: f64 = 20.0;
-/// Session size threshold for bloat warning (bytes)
-const SESSION_BLOAT_THRESHOLD: u64 = 500_000;
 
 /// Generate smart alerts from all available data
 pub fn generate_alerts(
@@ -119,12 +117,11 @@ pub fn generate_alerts(
         }
     }
 
-    // Sort: critical first, then warning, then info
+    // Sort: critical first, then warning
     alerts.sort_by(|a, b| {
         let order = |s: &AlertSeverity| match s {
             AlertSeverity::Critical => 0,
             AlertSeverity::Warning => 1,
-            AlertSeverity::Info => 2,
         };
         order(&a.severity).cmp(&order(&b.severity))
     });

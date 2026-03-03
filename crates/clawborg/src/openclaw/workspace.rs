@@ -3,18 +3,6 @@ use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 use std::path::Path;
 
-/// OpenClaw standard bootstrap files (from docs.openclaw.ai).
-/// ClawBorg auto-discovers ALL .md files — this list is for health checks only.
-const STANDARD_BOOTSTRAP_FILES: &[&str] = &[
-    "AGENTS.md",
-    "SOUL.md",
-    "IDENTITY.md",
-    "USER.md",
-    "TOOLS.md",
-    "HEARTBEAT.md",
-    "BOOTSTRAP.md",
-    "MEMORY.md",
-];
 
 /// Build an AgentSummary from a ResolvedAgent
 pub fn build_agent_summary(agent: &ResolvedAgent) -> AgentSummary {
@@ -135,7 +123,7 @@ fn get_file_info(path: &Path) -> FileInfo {
             let modified = meta
                 .modified()
                 .ok()
-                .map(|t| DateTime::<Utc>::from(t));
+                .map(DateTime::<Utc>::from);
             FileInfo {
                 exists: true,
                 size_bytes: size,

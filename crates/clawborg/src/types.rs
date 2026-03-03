@@ -13,21 +13,6 @@ pub struct AppState {
     pub file_events_tx: broadcast::Sender<FileChangeEvent>,
 }
 
-impl AppState {
-    pub fn config_path(&self) -> PathBuf {
-        self.openclaw_dir.join("openclaw.json")
-    }
-
-    /// Standard session/state storage: ~/.openclaw/agents/
-    pub fn agents_state_dir(&self) -> PathBuf {
-        self.openclaw_dir.join("agents")
-    }
-
-    /// Shared/managed skills: ~/.openclaw/skills/
-    pub fn shared_skills_dir(&self) -> PathBuf {
-        self.openclaw_dir.join("skills")
-    }
-}
 
 // ─── OpenClaw Config Types ───
 // Supports BOTH single-agent and multi-agent setups.
@@ -159,8 +144,6 @@ pub struct ResolvedAgent {
     pub fallbacks: Vec<String>,
     /// Fully resolved workspace path on disk
     pub workspace_path: PathBuf,
-    /// State directory: ~/.openclaw/agents/<id>/
-    pub state_dir: PathBuf,
     /// Sessions directory: ~/.openclaw/agents/<id>/sessions/
     pub sessions_dir: PathBuf,
     pub is_default: bool,
@@ -304,7 +287,6 @@ pub enum SessionStatus {
     Active,
     Idle,
     Stale,
-    Archived,
 }
 
 // ─── Health Audit Types ───
@@ -476,5 +458,4 @@ pub struct Alert {
 pub enum AlertSeverity {
     Critical,
     Warning,
-    Info,
 }

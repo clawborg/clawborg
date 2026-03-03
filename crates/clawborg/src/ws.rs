@@ -32,10 +32,9 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
     // Receive pings/pongs from client (keep alive)
     let recv_task = tokio::spawn(async move {
         while let Some(Ok(msg)) = receiver.next().await {
-            match msg {
-                Message::Close(_) => break,
-                _ => {} // Ignore client messages for now
-            }
+            if let Message::Close(_) = msg {
+                break;
+            } // Ignore other client messages for now
         }
     });
 
