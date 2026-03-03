@@ -17,6 +17,60 @@ pub struct FileParams {
     pub section: Option<String>,
 }
 
+#[derive(Deserialize)]
+pub struct ListDirParams {
+    /// Relative sub-path within the section (e.g. "memory" or "tasks/pending")
+    pub path: Option<String>,
+    /// Section label — omit or "workspace" for main workspace, else a named dir label
+    pub section: Option<String>,
+}
+
+/// GET /api/agents/:id/files?path=subdir&section=label — List directory contents.
+/// When path is omitted, lists the section root. Returns DirListing.
+pub async fn list_dir(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Query(params): Query<ListDirParams>,
+) -> Result<Json<DirListing>, (StatusCode, Json<ApiError>)> {
+    let cfg = config::read_config(&state.openclaw_dir).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiError::new(format!("Config error: {e}"))),
+        )
+    })?;
+
+    let resolved = config::resolve_agents(&cfg, &state.openclaw_dir);
+    let agent = config::find_agent(&resolved, &id).ok_or_else(|| {
+        (
+            StatusCode::NOT_FOUND,
+            Json(ApiError::new(format!("Agent not found: {id}"))),
+        )
+    })?;
+
+    let subpath = params.path.as_deref().unwrap_or("");
+    let section_label = params.section.as_deref().unwrap_or("workspace");
+
+    let (base_path, label) = if section_label == "workspace" || section_label.is_empty() {
+        (agent.workspace_path.clone(), "workspace".to_string())
+    } else {
+        agent
+            .named_dirs
+            .iter()
+            .find(|nd| nd.label == section_label)
+            .map(|nd| (nd.path.clone(), nd.label.clone()))
+            .ok_or_else(|| {
+                (
+                    StatusCode::NOT_FOUND,
+                    Json(ApiError::new(format!("Section not found: {section_label}"))),
+                )
+            })?
+    };
+
+    workspace::browse_workspace_dir(&base_path, subpath, &label)
+        .map_err(|e| (StatusCode::NOT_FOUND, Json(ApiError::new(format!("{e}")))))
+        .map(Json)
+}
+
 /// GET /api/agents/:id/files/*path?section=label — Read a file
 /// Supports nested paths (e.g. "memory/2026-03-01.md") and named sections.
 pub async fn get_file(

@@ -13,6 +13,12 @@ export interface AgentSummary {
   isDefault: boolean;
 }
 
+export interface LocationEntry {
+  label: string;
+  path: string;
+  exists: boolean;
+}
+
 export interface AgentDetail {
   id: string;
   name: string | null;
@@ -29,6 +35,8 @@ export interface AgentDetail {
   isDefault: boolean;
   /** Extra directory sections from openclaw.json (agentDir, skills.load.extraDirs) */
   extraSections: DirSection[];
+  /** All resolved paths for this agent (workspace, sessions, agentDir, skills) */
+  locations: LocationEntry[];
 }
 
 export interface DirSection {
@@ -171,6 +179,8 @@ export interface CronEntry {
   deliveryTo: string | null;
   consecutiveErrors: number | null;
   lastError: string | null;
+  /** Full raw job JSON for display in the detail panel */
+  raw?: unknown;
 }
 
 export interface CronRunInfo {

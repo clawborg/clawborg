@@ -228,6 +228,8 @@ pub struct AgentDetail {
     pub is_default: bool,
     /// Extra directory sections from openclaw.json (agentDir, skills.load.extraDirs)
     pub extra_sections: Vec<DirSection>,
+    /// All resolved paths for this agent (workspace, sessions, agentDir, skills)
+    pub locations: Vec<LocationEntry>,
 }
 
 /// A named directory section surfaced from openclaw.json agent config
@@ -238,6 +240,15 @@ pub struct DirSection {
     pub path: String,
     pub files: HashMap<String, FileInfo>,
     pub directories: Vec<String>,
+}
+
+/// A resolved filesystem path shown in the agent Locations panel
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LocationEntry {
+    pub label: String,
+    pub path: String,
+    pub exists: bool,
 }
 
 /// Response for the directory browse endpoint
@@ -446,7 +457,7 @@ pub struct BloatedSession {
 //   { "version": 1, "jobs": [...] }
 
 /// cron/jobs.json top-level wrapper
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[allow(dead_code)]
 pub struct CronJobsFile {
     #[serde(default)]
@@ -455,7 +466,7 @@ pub struct CronJobsFile {
 }
 
 /// A single cron job definition from cron/jobs.json
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[allow(dead_code)]
 pub struct CronJobEntry {
@@ -486,7 +497,7 @@ pub struct CronJobEntry {
 
 /// Schedule definition — either a fixed interval or a cron expression.
 /// Real OpenClaw kinds: "every" (interval) or "cron" (cron expression).
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[allow(dead_code)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum CronSchedule {
@@ -507,7 +518,7 @@ pub enum CronSchedule {
 }
 
 /// Runtime state stored by OpenClaw after each job execution
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[allow(dead_code)]
 pub struct CronJobState {
@@ -529,7 +540,7 @@ pub struct CronJobState {
     pub last_delivery_status: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[allow(dead_code)]
 pub struct CronJobPayload {
@@ -542,7 +553,7 @@ pub struct CronJobPayload {
     pub thinking: Option<serde_json::Value>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[allow(dead_code)]
 pub struct CronJobDelivery {
@@ -582,6 +593,8 @@ pub struct CronEntry {
     pub delivery_to: Option<String>,
     pub consecutive_errors: Option<u32>,
     pub last_error: Option<String>,
+    /// Full raw job JSON for display in the detail panel
+    pub raw: serde_json::Value,
 }
 
 #[derive(Debug, Serialize, Clone)]

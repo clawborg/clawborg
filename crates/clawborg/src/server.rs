@@ -68,6 +68,8 @@ pub async fn run(config: ServerConfig) -> anyhow::Result<()> {
     let api = Router::new()
         .route("/agents", get(routes::agents::list_agents))
         .route("/agents/{id}", get(routes::agents::get_agent))
+        // Directory listing — must be registered before the wildcard file route
+        .route("/agents/{id}/files", get(routes::files::list_dir))
         .route(
             "/agents/{id}/files/{*filename}",
             get(routes::files::get_file).put(routes::files::update_file),

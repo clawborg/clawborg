@@ -13,6 +13,7 @@ import {
   Eye,
   Code2,
   ChevronRight,
+  MapPin,
 } from "lucide-react";
 import { marked } from "marked";
 import { fetchAgent, fetchFile, fetchDirListing } from "@/api/client";
@@ -331,6 +332,47 @@ export default function AgentDetail() {
           <span className="text-yellow-400">{agent.tasks.pending} pending</span>
           <span className="text-blue-400">{agent.tasks.approved} approved</span>
           <span className="text-green-400">{agent.tasks.done} done</span>
+        </div>
+      )}
+
+      {/* Locations panel — resolved paths from openclaw.json */}
+      {agent.locations && agent.locations.length > 0 && (
+        <div className="mb-4 bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-800">
+            <MapPin size={12} className="text-gray-500" />
+            <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">Locations</span>
+          </div>
+          <div className="divide-y divide-gray-800/50">
+            {agent.locations.map((loc) => {
+              const sectionIdx =
+                loc.label === "Workspace"
+                  ? 0
+                  : sections.findIndex((s) => s.label === loc.label);
+              return (
+                <div key={loc.label} className="flex items-center gap-3 px-4 py-2">
+                  <span className="text-xs text-gray-500 w-20 shrink-0">{loc.label}</span>
+                  <code className={`text-xs font-mono flex-1 truncate ${loc.exists ? "text-gray-400" : "text-gray-600 line-through"}`}>
+                    {loc.path}
+                  </code>
+                  {!loc.exists && (
+                    <span className="text-xs text-gray-600 shrink-0">missing</span>
+                  )}
+                  {sectionIdx >= 0 && loc.exists && (
+                    <button
+                      onClick={() => switchSection(sectionIdx)}
+                      className={`text-xs shrink-0 transition-colors ${
+                        activeSectionIdx === sectionIdx
+                          ? "text-claw-400 font-medium"
+                          : "text-gray-500 hover:text-claw-400"
+                      }`}
+                    >
+                      {activeSectionIdx === sectionIdx ? "Viewing" : "Browse"}
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 

@@ -48,8 +48,8 @@ pub fn build_agent_detail(agent: &ResolvedAgent) -> AgentDetail {
     let directories = discover_directories(ws);
     let health = check_agent_health(agent);
 
-    // Build extra sections from named dirs (agentDir, skills, etc.)
-    let extra_sections = agent
+    // Build extra sections from named dirs (Sessions, Agent Dir, Skills, etc.)
+    let extra_sections: Vec<DirSection> = agent
         .named_dirs
         .iter()
         .map(|nd| DirSection {
@@ -59,6 +59,20 @@ pub fn build_agent_detail(agent: &ResolvedAgent) -> AgentDetail {
             directories: discover_directories(&nd.path),
         })
         .collect();
+
+    // Build locations list: workspace + all named dirs, with resolved absolute paths
+    let mut locations = vec![LocationEntry {
+        label: "Workspace".to_string(),
+        path: agent.workspace_path.to_string_lossy().to_string(),
+        exists: agent.workspace_path.exists(),
+    }];
+    for nd in &agent.named_dirs {
+        locations.push(LocationEntry {
+            label: nd.label.clone(),
+            path: nd.path.to_string_lossy().to_string(),
+            exists: nd.path.exists(),
+        });
+    }
 
     AgentDetail {
         id: agent.id.clone(),
@@ -72,6 +86,7 @@ pub fn build_agent_detail(agent: &ResolvedAgent) -> AgentDetail {
         health,
         is_default: agent.is_default,
         extra_sections,
+        locations,
     }
 }
 

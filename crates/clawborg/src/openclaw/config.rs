@@ -77,6 +77,12 @@ pub fn resolve_agents(
 
                         let is_default = entry.is_default.unwrap_or(i == 0);
 
+                        let mut named_dirs = resolve_named_dirs(entry, openclaw_dir);
+                        named_dirs.push(NamedDir {
+                            label: "Sessions".to_string(),
+                            path: sessions_dir.clone(),
+                        });
+
                         ResolvedAgent {
                             id: entry.id.clone(),
                             name: entry.name.clone(),
@@ -87,7 +93,7 @@ pub fn resolve_agents(
                             workspace_path: ws_path,
                             sessions_dir,
                             is_default,
-                            named_dirs: resolve_named_dirs(entry, openclaw_dir),
+                            named_dirs,
                         }
                     })
                     .collect();
@@ -151,6 +157,12 @@ fn single_agent(
         .as_ref()
         .and_then(|i| i.name.clone());
 
+    let sessions_dir = agents_state_dir.join(id).join("sessions");
+    let named_dirs = vec![NamedDir {
+        label: "Sessions".to_string(),
+        path: sessions_dir.clone(),
+    }];
+
     ResolvedAgent {
         id: id.to_string(),
         name,
@@ -159,9 +171,9 @@ fn single_agent(
             .and_then(|m| m.fallbacks.clone())
             .unwrap_or_default(),
         workspace_path: workspace_path.to_path_buf(),
-        sessions_dir: agents_state_dir.join(id).join("sessions"),
+        sessions_dir,
         is_default: true,
-        named_dirs: vec![],
+        named_dirs,
     }
 }
 
@@ -208,15 +220,19 @@ fn detect_agents_from_filesystem(
 
     // Check if there's a main workspace
     if default_workspace.exists() {
+        let sessions_dir = agents_state_dir.join("main").join("sessions");
         agents.push(ResolvedAgent {
             id: "main".to_string(),
             name: None,
             model: None,
             fallbacks: vec![],
             workspace_path: default_workspace.to_path_buf(),
-            sessions_dir: agents_state_dir.join("main").join("sessions"),
+            named_dirs: vec![NamedDir {
+                label: "Sessions".to_string(),
+                path: sessions_dir.clone(),
+            }],
+            sessions_dir,
             is_default: true,
-            named_dirs: vec![],
         });
     }
 
@@ -235,9 +251,12 @@ fn detect_agents_from_filesystem(
                     model: None,
                     fallbacks: vec![],
                     workspace_path: openclaw_dir.join(format!("workspace-{id}")),
+                    named_dirs: vec![NamedDir {
+                        label: "Sessions".to_string(),
+                        path: sessions_dir.clone(),
+                    }],
                     sessions_dir,
                     is_default: false,
-                    named_dirs: vec![],
                 });
             }
         }

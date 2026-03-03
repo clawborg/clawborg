@@ -47,18 +47,6 @@ function fmtDuration(ms: number | null): string {
   return `${(ms / 60_000).toFixed(1)}m`;
 }
 
-/* ─── Detail field row ─── */
-
-function DetailRow({ label, value }: { label: string; value: string | number | null | undefined }) {
-  if (value === null || value === undefined || value === "") return null;
-  return (
-    <div className="flex gap-2 text-xs">
-      <span className="text-gray-500 w-32 shrink-0">{label}</span>
-      <span className="text-gray-300 font-mono break-all">{String(value)}</span>
-    </div>
-  );
-}
-
 /* ─── Crons Page ─── */
 
 export default function Crons() {
@@ -205,34 +193,28 @@ export default function Crons() {
                   </div>
                 </button>
 
-                {/* Collapsible detail panel */}
+                {/* Collapsible detail panel — raw JSON */}
                 {isExpanded && (
-                  <div className="border-t border-gray-800 px-4 py-3 space-y-2 bg-gray-950/50">
-                    <p className="text-xs text-gray-500 uppercase tracking-wide mb-2">Job Details</p>
-                    <DetailRow label="ID" value={cron.id} />
-                    <DetailRow label="Session Target" value={cron.sessionTarget} />
-                    <DetailRow label="Session Key" value={cron.sessionKey} />
-                    <DetailRow label="Wake Mode" value={cron.wakeMode} />
-                    {cron.payloadMessage && (
-                      <div className="flex gap-2 text-xs">
-                        <span className="text-gray-500 w-32 shrink-0">Payload</span>
-                        <span className="text-gray-300 bg-gray-900 rounded p-2 border border-gray-800 flex-1 font-mono whitespace-pre-wrap break-all">
-                          {cron.payloadMessage}
-                        </span>
-                      </div>
-                    )}
-                    <DetailRow label="Delivery Mode" value={cron.deliveryMode} />
-                    <DetailRow label="Delivery Channel" value={cron.deliveryChannel} />
-                    <DetailRow label="Delivery To" value={cron.deliveryTo} />
-                    {(cron.consecutiveErrors ?? 0) > 0 && (
-                      <DetailRow label="Consec. Errors" value={cron.consecutiveErrors} />
-                    )}
-                    {cron.lastError && (
-                      <div className="flex gap-2 text-xs">
-                        <span className="text-gray-500 w-32 shrink-0">Last Error</span>
-                        <span className="text-red-400 font-mono break-all">{cron.lastError}</span>
-                      </div>
-                    )}
+                  <div className="border-t border-gray-800 bg-gray-950/50">
+                    <p className="text-xs text-gray-500 uppercase tracking-wide px-4 pt-3 pb-2">Job Details</p>
+                    <pre className="text-xs text-gray-300 font-mono whitespace-pre overflow-auto max-h-80 px-4 pb-4 leading-relaxed">
+                      {JSON.stringify(cron.raw ?? {
+                        id: cron.id,
+                        agent: cron.agent,
+                        task: cron.task,
+                        schedule: cron.schedule,
+                        enabled: cron.enabled,
+                        sessionKey: cron.sessionKey,
+                        sessionTarget: cron.sessionTarget,
+                        wakeMode: cron.wakeMode,
+                        payloadMessage: cron.payloadMessage,
+                        deliveryMode: cron.deliveryMode,
+                        deliveryChannel: cron.deliveryChannel,
+                        deliveryTo: cron.deliveryTo,
+                        consecutiveErrors: cron.consecutiveErrors,
+                        lastError: cron.lastError,
+                      }, null, 2)}
+                    </pre>
                   </div>
                 )}
               </div>
