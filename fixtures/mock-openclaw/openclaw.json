@@ -22,7 +22,13 @@
         "id": "main",
         "name": "Archie",
         "default": true,
-        "workspace": "./workspace"
+        "workspace": "./workspace",
+        "agentDir": "./agents/main",
+        "skills": {
+          "load": {
+            "extraDirs": ["./workspace/skills"]
+          }
+        }
       },
       {
         "id": "coder",

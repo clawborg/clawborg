@@ -91,6 +91,28 @@ pub struct AgentEntry {
     pub model: Option<AgentModel>,
     #[serde(default, rename = "default")]
     pub is_default: Option<bool>,
+    /// Agent state directory (e.g. ~/.openclaw/agents/<id>/)
+    #[serde(default)]
+    pub agent_dir: Option<String>,
+    /// Skills config — may include extra directories to surface in ClawBorg
+    #[serde(default)]
+    pub skills: Option<AgentSkillsConfig>,
+}
+
+/// `skills` block in an agent entry
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSkillsConfig {
+    #[serde(default)]
+    pub load: Option<AgentSkillsLoad>,
+}
+
+/// `skills.load` — directories containing extra skill files
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSkillsLoad {
+    #[serde(default)]
+    pub extra_dirs: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -128,6 +150,16 @@ pub struct ResolvedAgent {
     /// Sessions directory: ~/.openclaw/agents/<id>/sessions/
     pub sessions_dir: PathBuf,
     pub is_default: bool,
+    /// Extra named directories from openclaw.json (agentDir, skills.load.extraDirs)
+    pub named_dirs: Vec<NamedDir>,
+}
+
+/// A named extra directory sourced from openclaw.json agent config
+#[derive(Debug, Clone)]
+pub struct NamedDir {
+    /// Display label (e.g. "Agent Dir", "Skills")
+    pub label: String,
+    pub path: PathBuf,
 }
 
 // ─── API Response Types ───
@@ -194,6 +226,30 @@ pub struct AgentDetail {
     pub directories: Vec<String>,
     pub health: AgentHealth,
     pub is_default: bool,
+    /// Extra directory sections from openclaw.json (agentDir, skills.load.extraDirs)
+    pub extra_sections: Vec<DirSection>,
+}
+
+/// A named directory section surfaced from openclaw.json agent config
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DirSection {
+    pub label: String,
+    pub path: String,
+    pub files: HashMap<String, FileInfo>,
+    pub directories: Vec<String>,
+}
+
+/// Response for the directory browse endpoint
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DirListing {
+    /// Relative sub-path within the section (empty = root)
+    pub path: String,
+    /// Section label ("workspace", or named dir label)
+    pub base_label: String,
+    pub files: HashMap<String, FileInfo>,
+    pub directories: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -516,6 +572,16 @@ pub struct CronEntry {
     /// Next expected run (estimated)
     pub next_run: Option<String>,
     pub status: CronStatus,
+    // ── Detail fields (for collapsible panel) ──
+    pub session_key: Option<String>,
+    pub session_target: Option<String>,
+    pub wake_mode: Option<String>,
+    pub payload_message: Option<String>,
+    pub delivery_mode: Option<String>,
+    pub delivery_channel: Option<String>,
+    pub delivery_to: Option<String>,
+    pub consecutive_errors: Option<u32>,
+    pub last_error: Option<String>,
 }
 
 #[derive(Debug, Serialize, Clone)]

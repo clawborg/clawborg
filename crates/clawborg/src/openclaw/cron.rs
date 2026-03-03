@@ -65,6 +65,15 @@ fn job_to_entry(job: &CronJobEntry) -> CronEntry {
         last_run,
         next_run,
         status,
+        session_key: job.session_key.clone(),
+        session_target: job.session_target.clone(),
+        wake_mode: job.wake_mode.clone(),
+        payload_message: job.payload.as_ref().and_then(|p| p.message.clone()),
+        delivery_mode: job.delivery.as_ref().and_then(|d| d.mode.clone()),
+        delivery_channel: job.delivery.as_ref().and_then(|d| d.channel.clone()),
+        delivery_to: job.delivery.as_ref().and_then(|d| d.to.clone()),
+        consecutive_errors: job.state.as_ref().map(|s| s.consecutive_errors),
+        last_error: job.state.as_ref().and_then(|s| s.last_error.clone()),
     }
 }
 

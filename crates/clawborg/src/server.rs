@@ -69,9 +69,10 @@ pub async fn run(config: ServerConfig) -> anyhow::Result<()> {
         .route("/agents", get(routes::agents::list_agents))
         .route("/agents/{id}", get(routes::agents::get_agent))
         .route(
-            "/agents/{id}/files/{filename}",
+            "/agents/{id}/files/{*filename}",
             get(routes::files::get_file).put(routes::files::update_file),
         )
+        .route("/agents/{id}/browse", get(routes::agents::browse_agent))
         .route("/agents/{id}/tasks", get(routes::tasks::list_tasks))
         .route("/sessions", get(routes::sessions::list_sessions))
         .route("/health", get(routes::health::health_audit))
