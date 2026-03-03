@@ -1,0 +1,26 @@
+{
+  "sessions": [
+    {
+      "key": "agent:coder:cli:local",
+      "model": "anthropic/claude-sonnet-4-5",
+      "inputTokens": 119930,
+      "outputTokens": 3365,
+      "cacheReadTokens": 108300,
+      "cost": 0.519,
+      "turnCount": 6,
+      "lastActive": "2026-03-01T10:31:15Z",
+      "sizeBytes": 3813
+    },
+    {
+      "key": "agent:coder:cron:codereview",
+      "model": "anthropic/claude-sonnet-4-5",
+      "inputTokens": 43100,
+      "outputTokens": 924,
+      "cacheReadTokens": 37700,
+      "cost": 0.181,
+      "turnCount": 2,
+      "lastActive": "2026-03-02T08:00:08Z",
+      "sizeBytes": 1233
+    }
+  ]
+}

@@ -48,7 +48,38 @@ pub struct OpenClawConfig {
     pub crons: Option<Vec<CronConfigEntry>>,
 }
 
-/// Raw cron entry from openclaw.json "crons" array
+/// Per-session cost/token summary stored in sessions.json
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionStoreEntry {
+    pub key: String,
+    pub model: Option<String>,
+    pub input_tokens: u64,
+    pub output_tokens: u64,
+    #[serde(default)]
+    pub cache_read_tokens: u64,
+    pub cost: f64,
+    pub turn_count: u64,
+    /// ISO 8601 timestamp of the last message in this session
+    pub last_active: Option<String>,
+    /// Size of the backing JSONL file in bytes
+    #[serde(default)]
+    pub size_bytes: u64,
+}
+
+/// agents/<id>/sessions/sessions.json — aggregate session store written by OpenClaw
+#[derive(Debug, Deserialize)]
+pub struct SessionStore {
+    pub sessions: Vec<SessionStoreEntry>,
+}
+
+/// cron/jobs.json — top-level wrapper for cron job definitions
+#[derive(Debug, Deserialize)]
+pub struct CronJobsFile {
+    pub jobs: Vec<CronConfigEntry>,
+}
+
+/// Raw cron entry from cron/jobs.json (also used for openclaw.json compat)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CronConfigEntry {

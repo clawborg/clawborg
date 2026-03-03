@@ -17,7 +17,7 @@ pub async fn list_crons(
     })?;
 
     let resolved = config::resolve_agents(&cfg, &state.openclaw_dir);
-    let crons = cron::build_cron_list(&cfg, &resolved);
+    let crons = cron::build_cron_list(&state.openclaw_dir, &resolved);
 
     Ok(Json(crons))
 }

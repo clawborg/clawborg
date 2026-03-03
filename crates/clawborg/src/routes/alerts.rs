@@ -18,7 +18,7 @@ pub async fn get_alerts(
 
     let resolved = config::resolve_agents(&cfg, &state.openclaw_dir);
     let usage_summary = usage::build_usage_summary(&resolved);
-    let cron_list = cron::build_cron_list(&cfg, &resolved);
+    let cron_list = cron::build_cron_list(&state.openclaw_dir, &resolved);
     let health_report = health::build_health_report(&state.openclaw_dir).unwrap_or(HealthReport {
         total_agents: 0,
         healthy_agents: 0,
