@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cargo *)",
+      "Bash(pnpm *)",
+      "Bash(git *)",
+      "Bash(ls *)",
+      "Bash(cat *)",
+      "Bash(grep *)",
+      "Bash(find *)",
+      "Bash(mkdir *)",
+      "Bash(cp *)",
+      "Bash(mv *)",
+      "Bash(rm *.bak)",
+      "Read(*)",
+      "Write(crates/**)",
+      "Write(web/src/**)",
+      "Write(web/index.html)",
+      "Write(fixtures/**)",
+      "Write(CHANGELOG.md)",
+      "Write(README.md)",
+      "Write(CLAUDE.md)"
+    ],
+    "deny": [
+      "Bash(rm -rf *)",
+      "Bash(sudo *)",
+      "Write(.env*)",
+      "Write(LICENSE)"
+    ]
+  }
+}
