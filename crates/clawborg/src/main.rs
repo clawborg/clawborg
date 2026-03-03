@@ -2,6 +2,7 @@ use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 use tracing_subscriber::EnvFilter;
 
+mod clawborg_config;
 mod openclaw;
 mod routes;
 mod server;
