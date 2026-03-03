@@ -13,7 +13,6 @@ pub struct AppState {
     pub file_events_tx: broadcast::Sender<FileChangeEvent>,
 }
 
-
 // ─── OpenClaw Config Types ───
 // Supports BOTH single-agent and multi-agent setups.
 // Standard OpenClaw uses "agent" (singular) or "agents.defaults".
@@ -44,58 +43,6 @@ pub struct OpenClawConfig {
     pub memory: Option<serde_json::Value>,
     #[serde(default)]
     pub mcp: Option<serde_json::Value>,
-    #[serde(default)]
-    pub crons: Option<Vec<CronConfigEntry>>,
-}
-
-/// Per-session cost/token summary stored in sessions.json
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SessionStoreEntry {
-    pub key: String,
-    pub model: Option<String>,
-    pub input_tokens: u64,
-    pub output_tokens: u64,
-    #[serde(default)]
-    pub cache_read_tokens: u64,
-    pub cost: f64,
-    pub turn_count: u64,
-    /// ISO 8601 timestamp of the last message in this session
-    pub last_active: Option<String>,
-    /// Size of the backing JSONL file in bytes
-    #[serde(default)]
-    pub size_bytes: u64,
-}
-
-/// agents/<id>/sessions/sessions.json — aggregate session store written by OpenClaw
-#[derive(Debug, Deserialize)]
-pub struct SessionStore {
-    pub sessions: Vec<SessionStoreEntry>,
-}
-
-/// cron/jobs.json — top-level wrapper for cron job definitions
-#[derive(Debug, Deserialize)]
-pub struct CronJobsFile {
-    pub jobs: Vec<CronConfigEntry>,
-}
-
-/// Raw cron entry from cron/jobs.json (also used for openclaw.json compat)
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CronConfigEntry {
-    pub schedule: String,
-    #[serde(default)]
-    pub agent: Option<String>,
-    #[serde(default)]
-    pub task: Option<String>,
-    #[serde(default = "default_true")]
-    pub enabled: bool,
-    #[serde(default)]
-    pub delete_after_run: bool,
-}
-
-fn default_true() -> bool {
-    true
 }
 
 /// "agents" block — multi-agent or single with defaults
@@ -263,37 +210,38 @@ pub struct TaskCounts {
 }
 
 // ─── Session Types ───
+// Real OpenClaw sessions.json format:
+//   Flat map of session_key → SessionEntry
+//   e.g. { "agent:pa:telegram:group:123": { "sessionId": "...", "updatedAt": 1234, ... } }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionEntry {
     #[serde(default)]
     pub session_id: Option<String>,
+    /// Unix timestamp in milliseconds
     #[serde(default)]
-    pub updated_at: Option<f64>,
-    #[serde(default)]
-    pub input_tokens: Option<u64>,
-    #[serde(default)]
-    pub output_tokens: Option<u64>,
-    #[serde(default)]
-    pub total_tokens: Option<u64>,
-    #[serde(default)]
-    pub context_tokens: Option<u64>,
+    pub updated_at: Option<u64>,
+    /// Model name only (e.g. "claude-sonnet-4-5"), no provider prefix
     #[serde(default)]
     pub model: Option<String>,
+    /// Model provider (e.g. "anthropic", "openrouter", "openai")
     #[serde(default)]
-    pub origin: Option<SessionOrigin>,
-    #[serde(flatten)]
-    pub extra: HashMap<String, serde_json::Value>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SessionOrigin {
+    pub model_provider: Option<String>,
     #[serde(default)]
-    pub label: Option<String>,
+    pub input_tokens: u64,
     #[serde(default)]
-    pub provider: Option<String>,
+    pub output_tokens: u64,
+    #[serde(default)]
+    pub total_tokens: u64,
+    /// Cache read tokens (prompt caching)
+    #[serde(default)]
+    pub cache_read: u64,
+    /// Cache write tokens (prompt caching)
+    #[serde(default)]
+    pub cache_write: u64,
+    #[serde(default)]
+    pub context_tokens: u64,
 }
 
 #[derive(Debug, Serialize)]
@@ -304,6 +252,7 @@ pub struct SessionSummary {
     pub session_id: Option<String>,
     pub channel: Option<String>,
     pub label: Option<String>,
+    /// Unix timestamp in milliseconds (f64 for JS compat and sort)
     pub last_active: Option<f64>,
     pub status: SessionStatus,
     pub input_tokens: u64,
@@ -366,7 +315,7 @@ impl ApiError {
     }
 }
 
-// ─── Usage / Cost Types (v0.2) ───
+// ─── Usage / Cost Types ───
 
 #[derive(Debug, Serialize, Default, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -433,23 +382,102 @@ pub struct BloatedSession {
     pub size_display: String,
 }
 
-// ─── Cron Types (v0.2) ───
+// ─── Cron Types ───
+// Real OpenClaw cron/jobs.json format:
+//   { "version": 1, "jobs": [...] }
 
+/// cron/jobs.json top-level wrapper
+#[derive(Debug, Deserialize)]
+#[allow(dead_code)]
+pub struct CronJobsFile {
+    #[serde(default)]
+    pub version: u32,
+    pub jobs: Vec<CronJobEntry>,
+}
+
+/// A single cron job definition from cron/jobs.json
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
+pub struct CronJobEntry {
+    pub id: String,
+    pub agent_id: String,
+    pub name: String,
+    pub enabled: bool,
+    pub schedule: CronSchedule,
+    #[serde(default)]
+    pub session_target: Option<String>,
+    #[serde(default)]
+    pub wake_mode: Option<String>,
+    #[serde(default)]
+    pub payload: Option<CronJobPayload>,
+    #[serde(default)]
+    pub delivery: Option<CronJobDelivery>,
+    #[serde(default)]
+    pub state: Option<CronJobState>,
+}
+
+/// Schedule definition — either a fixed interval or a cron expression
+#[derive(Debug, Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum CronSchedule {
+    /// e.g. { "kind": "interval", "everyMs": 1800000 }
+    Interval { every_ms: u64 },
+    /// e.g. { "kind": "cron", "expr": "0 8 * * *" }
+    Cron { expr: String },
+}
+
+/// Runtime state stored by OpenClaw after each job execution
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
+pub struct CronJobState {
+    #[serde(default)]
+    pub last_run_at_ms: Option<u64>,
+    #[serde(default)]
+    pub last_status: Option<String>,
+    #[serde(default)]
+    pub last_duration_ms: Option<u64>,
+    #[serde(default)]
+    pub consecutive_errors: u32,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
+pub struct CronJobPayload {
+    pub kind: String,
+    #[serde(default)]
+    pub message: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
+pub struct CronJobDelivery {
+    #[serde(default)]
+    pub mode: Option<String>,
+    #[serde(default)]
+    pub channel: Option<String>,
+    #[serde(default)]
+    pub to: Option<String>,
+}
+
+/// API response type for a cron job (served to frontend)
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct CronEntry {
+    pub id: String,
     pub schedule: String,
     pub agent: String,
     pub task: String,
     pub enabled: bool,
-    pub delete_after_run: bool,
     /// Human-readable schedule description
     pub schedule_display: String,
-    /// Last known run (from session data)
+    /// Last known run info (from job state)
     pub last_run: Option<CronRunInfo>,
-    /// Next expected run
+    /// Next expected run (estimated)
     pub next_run: Option<String>,
-    /// Status: ok, overdue, disabled, unknown
     pub status: CronStatus,
 }
 
@@ -457,9 +485,8 @@ pub struct CronEntry {
 #[serde(rename_all = "camelCase")]
 pub struct CronRunInfo {
     pub timestamp: String,
-    pub cost: f64,
-    pub tokens: u64,
     pub duration_ms: Option<u64>,
+    pub last_status: Option<String>,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -471,7 +498,7 @@ pub enum CronStatus {
     Unknown,
 }
 
-// ─── Smart Alerts Types (v0.2) ───
+// ─── Smart Alerts Types ───
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]

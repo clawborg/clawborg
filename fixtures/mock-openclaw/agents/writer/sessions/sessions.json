@@ -1,26 +1,26 @@
 {
-  "sessions": [
-    {
-      "key": "agent:writer:cron:contentschedule",
-      "model": "openrouter/deepseek/deepseek-chat-v3-0324",
-      "inputTokens": 6800,
-      "outputTokens": 365,
-      "cacheReadTokens": 0,
-      "cost": 0.0015,
-      "turnCount": 2,
-      "lastActive": "2026-03-02T07:00:08Z",
-      "sizeBytes": 1202
-    },
-    {
-      "key": "agent:writer:telegram:dm:123456789",
-      "model": "openrouter/deepseek/deepseek-chat-v3-0324",
-      "inputTokens": 10546,
-      "outputTokens": 3739,
-      "cacheReadTokens": 0,
-      "cost": 0.0066,
-      "turnCount": 3,
-      "lastActive": "2026-03-01T11:05:30Z",
-      "sizeBytes": 2009
-    }
-  ]
+  "agent:writer:cron:contentschedule": {
+    "sessionId": "sess_writer_cs_01",
+    "updatedAt": 1740895208000,
+    "model": "deepseek-chat-v3-0324",
+    "modelProvider": "openrouter",
+    "inputTokens": 6800,
+    "outputTokens": 365,
+    "totalTokens": 7165,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "contextTokens": 3400
+  },
+  "agent:writer:telegram:dm:123456789": {
+    "sessionId": "sess_writer_tg_01",
+    "updatedAt": 1740823530000,
+    "model": "deepseek-chat-v3-0324",
+    "modelProvider": "openrouter",
+    "inputTokens": 10546,
+    "outputTokens": 3739,
+    "totalTokens": 14285,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "contextTokens": 5200
+  }
 }

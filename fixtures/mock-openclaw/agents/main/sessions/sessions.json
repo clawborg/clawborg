@@ -1,26 +1,26 @@
 {
-  "sessions": [
-    {
-      "key": "agent:main:cron:heartbeat",
-      "model": "anthropic/claude-sonnet-4-5",
-      "inputTokens": 67450,
-      "outputTokens": 299,
-      "cacheReadTokens": 62100,
-      "cost": 0.266,
-      "turnCount": 7,
-      "lastActive": "2026-03-02T06:30:05Z",
-      "sizeBytes": 2870
-    },
-    {
-      "key": "agent:main:telegram:dm:123456789",
-      "model": "anthropic/claude-sonnet-4-5",
-      "inputTokens": 19657,
-      "outputTokens": 310,
-      "cacheReadTokens": 17900,
-      "cost": 0.082,
-      "turnCount": 4,
-      "lastActive": "2026-03-01T09:15:35Z",
-      "sizeBytes": 2084
-    }
-  ]
+  "agent:main:cron:heartbeat": {
+    "sessionId": "sess_main_hb_01",
+    "updatedAt": 1740893405000,
+    "model": "claude-sonnet-4-5",
+    "modelProvider": "anthropic",
+    "inputTokens": 67450,
+    "outputTokens": 299,
+    "totalTokens": 67749,
+    "cacheRead": 62100,
+    "cacheWrite": 5350,
+    "contextTokens": 8200
+  },
+  "agent:main:telegram:dm:123456789": {
+    "sessionId": "sess_main_tg_01",
+    "updatedAt": 1740816935000,
+    "model": "claude-sonnet-4-5",
+    "modelProvider": "anthropic",
+    "inputTokens": 19657,
+    "outputTokens": 310,
+    "totalTokens": 19967,
+    "cacheRead": 17900,
+    "cacheWrite": 1757,
+    "contextTokens": 5800
+  }
 }

@@ -1,26 +1,26 @@
 {
-  "sessions": [
-    {
-      "key": "agent:coder:cli:local",
-      "model": "anthropic/claude-sonnet-4-5",
-      "inputTokens": 119930,
-      "outputTokens": 3365,
-      "cacheReadTokens": 108300,
-      "cost": 0.519,
-      "turnCount": 6,
-      "lastActive": "2026-03-01T10:31:15Z",
-      "sizeBytes": 3813
-    },
-    {
-      "key": "agent:coder:cron:codereview",
-      "model": "anthropic/claude-sonnet-4-5",
-      "inputTokens": 43100,
-      "outputTokens": 924,
-      "cacheReadTokens": 37700,
-      "cost": 0.181,
-      "turnCount": 2,
-      "lastActive": "2026-03-02T08:00:08Z",
-      "sizeBytes": 1233
-    }
-  ]
+  "agent:coder:cli:local": {
+    "sessionId": "sess_coder_cli_01",
+    "updatedAt": 1740821475000,
+    "model": "claude-sonnet-4-5",
+    "modelProvider": "anthropic",
+    "inputTokens": 119930,
+    "outputTokens": 3365,
+    "totalTokens": 123295,
+    "cacheRead": 108300,
+    "cacheWrite": 11630,
+    "contextTokens": 28900
+  },
+  "agent:coder:cron:codereview": {
+    "sessionId": "sess_coder_cr_01",
+    "updatedAt": 1740898808000,
+    "model": "claude-sonnet-4-5",
+    "modelProvider": "anthropic",
+    "inputTokens": 43100,
+    "outputTokens": 924,
+    "totalTokens": 44024,
+    "cacheRead": 37700,
+    "cacheWrite": 5400,
+    "contextTokens": 34200
+  }
 }

@@ -73,7 +73,7 @@ fn parse_jsonl_session(agent_id: &str, path: &Path) -> Option<SessionSummary> {
         .map(|s| s.to_string_lossy().to_string())
         .unwrap_or_default();
 
-    let mut last_timestamp: Option<f64> = None;
+    let mut last_timestamp: Option<u64> = None;
     let mut total_input_tokens: u64 = 0;
     let mut total_output_tokens: u64 = 0;
     let mut last_model: Option<String> = None;
@@ -90,13 +90,15 @@ fn parse_jsonl_session(agent_id: &str, path: &Path) -> Option<SessionSummary> {
 
         // Try to parse each line as JSON
         if let Ok(obj) = serde_json::from_str::<serde_json::Value>(trimmed) {
-            // Extract timestamp
-            if let Some(ts) = obj.get("timestamp").and_then(|v| v.as_f64()) {
+            // "ts" field is ms since epoch (integer)
+            if let Some(ts) = obj.get("ts").and_then(|v| v.as_u64()) {
                 last_timestamp = Some(ts);
             }
-            // Some formats use "ts" instead
-            if let Some(ts) = obj.get("ts").and_then(|v| v.as_f64()) {
-                last_timestamp = Some(ts);
+            // "timestamp" field is ISO 8601 string — convert to ms
+            if let Some(ts_str) = obj.get("timestamp").and_then(|v| v.as_str()) {
+                if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(ts_str) {
+                    last_timestamp = Some(dt.timestamp_millis() as u64);
+                }
             }
 
             // Extract token usage from assistant messages or usage blocks
@@ -128,7 +130,7 @@ fn parse_jsonl_session(agent_id: &str, path: &Path) -> Option<SessionSummary> {
                 let duration = modified
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap_or_default();
-                last_timestamp = Some(duration.as_millis() as f64);
+                last_timestamp = Some(duration.as_millis() as u64);
             }
         }
     }
@@ -142,7 +144,7 @@ fn parse_jsonl_session(agent_id: &str, path: &Path) -> Option<SessionSummary> {
         session_id: None,
         channel,
         label: None,
-        last_active: last_timestamp,
+        last_active: last_timestamp.map(|ms| ms as f64),
         status,
         input_tokens: total_input_tokens,
         output_tokens: total_output_tokens,
@@ -179,37 +181,32 @@ fn parse_sessions_json(agent_id: &str, path: &Path) -> Vec<SessionSummary> {
 }
 
 fn entry_to_summary(agent_id: &str, key: &str, entry: SessionEntry) -> SessionSummary {
-    let channel = entry
-        .origin
-        .as_ref()
-        .and_then(|o| o.provider.clone())
-        .or_else(|| extract_channel_from_key(key));
-
-    let label = entry.origin.as_ref().and_then(|o| o.label.clone());
+    let channel = extract_channel_from_key(key);
     let status = determine_session_status(entry.updated_at);
+    let last_active = entry.updated_at.map(|ms| ms as f64);
 
     SessionSummary {
         agent_id: agent_id.to_string(),
         session_key: key.to_string(),
         session_id: entry.session_id,
         channel,
-        label,
-        last_active: entry.updated_at,
+        label: None,
+        last_active,
         status,
-        input_tokens: entry.input_tokens.unwrap_or(0),
-        output_tokens: entry.output_tokens.unwrap_or(0),
-        context_tokens: entry.context_tokens.unwrap_or(0),
+        input_tokens: entry.input_tokens,
+        output_tokens: entry.output_tokens,
+        context_tokens: entry.context_tokens,
         model: entry.model,
     }
 }
 
-/// Determine session status based on last activity
-fn determine_session_status(last_active: Option<f64>) -> SessionStatus {
-    let now_ms = chrono::Utc::now().timestamp_millis() as f64;
-    match last_active {
+/// Determine session status based on last activity timestamp (ms since epoch).
+fn determine_session_status(updated_at: Option<u64>) -> SessionStatus {
+    let now_ms = chrono::Utc::now().timestamp_millis() as u64;
+    match updated_at {
         Some(ts) => {
-            let age_ms = now_ms - ts;
-            let age_hours = age_ms / (1000.0 * 3600.0);
+            let age_ms = now_ms.saturating_sub(ts);
+            let age_hours = age_ms as f64 / (1000.0 * 3600.0);
             if age_hours < 0.5 {
                 SessionStatus::Active
             } else if age_hours < 24.0 {

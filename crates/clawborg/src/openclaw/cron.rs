@@ -1,165 +1,113 @@
 use crate::types::*;
 use std::path::Path;
 
-/// Build cron entries by reading ~/.openclaw/cron/jobs.json with status info
-pub fn build_cron_list(openclaw_dir: &Path, agents: &[ResolvedAgent]) -> Vec<CronEntry> {
+/// Build cron entries by reading ~/.openclaw/cron/jobs.json.
+/// Last-run info comes from the `state` object embedded in each job.
+pub fn build_cron_list(openclaw_dir: &Path, _agents: &[ResolvedAgent]) -> Vec<CronEntry> {
     let jobs_path = openclaw_dir.join("cron").join("jobs.json");
 
-    let jobs: Vec<CronConfigEntry> = std::fs::read_to_string(&jobs_path)
+    let jobs: Vec<CronJobEntry> = std::fs::read_to_string(&jobs_path)
         .ok()
         .and_then(|s| serde_json::from_str::<CronJobsFile>(&s).ok())
         .map(|f| f.jobs)
         .unwrap_or_default();
 
-    jobs.iter()
-        .map(|raw| {
-            let agent_id = raw.agent.as_deref().unwrap_or("main");
-            let task = raw.task.as_deref().unwrap_or("(unnamed task)");
-            let schedule_display = describe_cron(&raw.schedule);
-
-            // Find last run from session data
-            let last_run = find_last_cron_run(agent_id, task, agents);
-
-            // Determine status
-            let status = if !raw.enabled {
-                CronStatus::Disabled
-            } else if let Some(ref run) = last_run {
-                // Check if overdue based on schedule
-                if is_overdue(&raw.schedule, &run.timestamp) {
-                    CronStatus::Overdue
-                } else {
-                    CronStatus::Ok
-                }
-            } else {
-                CronStatus::Unknown
-            };
-
-            // Next run (simple estimation)
-            let next_run = if raw.enabled {
-                estimate_next_run(&raw.schedule)
-            } else {
-                None
-            };
-
-            CronEntry {
-                schedule: raw.schedule.clone(),
-                agent: agent_id.to_string(),
-                task: task.to_string(),
-                enabled: raw.enabled,
-                delete_after_run: raw.delete_after_run,
-                schedule_display,
-                last_run,
-                next_run,
-                status,
-            }
-        })
-        .collect()
+    jobs.iter().map(job_to_entry).collect()
 }
 
-/// Find the most recent cron run by scanning session files for cron sessions
-fn find_last_cron_run(
-    agent_id: &str,
-    _task: &str,
-    agents: &[ResolvedAgent],
-) -> Option<CronRunInfo> {
-    let agent = agents.iter().find(|a| a.id == agent_id)?;
+fn job_to_entry(job: &CronJobEntry) -> CronEntry {
+    let schedule_display = describe_schedule(&job.schedule);
+    let schedule_str = schedule_to_string(&job.schedule);
 
-    if !agent.sessions_dir.exists() {
-        return None;
-    }
+    let last_run = job.state.as_ref().and_then(state_to_run_info);
 
-    let entries = std::fs::read_dir(&agent.sessions_dir).ok()?;
-    let mut latest: Option<CronRunInfo> = None;
-    let mut latest_ts: f64 = 0.0;
-
-    for entry in entries.filter_map(|e| e.ok()) {
-        let path = entry.path();
-        let fname = entry.file_name().to_string_lossy().to_string();
-
-        // Only look at cron session files
-        if !fname.contains(":cron:") {
-            continue;
+    let status = if !job.enabled {
+        CronStatus::Disabled
+    } else if let Some(ref state) = job.state {
+        match state.last_run_at_ms {
+            None => CronStatus::Unknown,
+            Some(_) if is_overdue(&job.schedule, state) => CronStatus::Overdue,
+            Some(_) => CronStatus::Ok,
         }
+    } else {
+        CronStatus::Unknown
+    };
 
-        if path.extension().map(|e| e == "jsonl").unwrap_or(false) {
-            if let Some((ts, run)) = parse_last_cron_run(&path) {
-                if ts > latest_ts {
-                    latest_ts = ts;
-                    latest = Some(run);
-                }
-            }
-        }
-    }
-
-    latest
-}
-
-/// Parse a cron session JSONL to find the last run info
-fn parse_last_cron_run(path: &Path) -> Option<(f64, CronRunInfo)> {
-    let content = std::fs::read_to_string(path).ok()?;
-    let lines: Vec<&str> = content.lines().rev().collect();
-
-    let mut last_ts: f64 = 0.0;
-    let mut last_cost: f64 = 0.0;
-    let mut last_tokens: u64 = 0;
-    let mut last_timestamp_str = String::new();
-
-    for line in &lines {
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-
-        if let Ok(obj) = serde_json::from_str::<serde_json::Value>(trimmed) {
-            let ts = obj.get("ts").and_then(|v| v.as_f64()).unwrap_or(0.0);
-            if ts > last_ts {
-                last_ts = ts;
-
-                // Get timestamp string
-                last_timestamp_str = obj
-                    .get("timestamp")
-                    .and_then(|v| v.as_str())
-                    .map(String::from)
-                    .unwrap_or_else(|| {
-                        let secs = (ts / 1000.0) as i64;
-                        chrono::DateTime::from_timestamp(secs, 0)
-                            .map(|dt| dt.to_rfc3339())
-                            .unwrap_or_default()
-                    });
-            }
-
-            if let Some(usage) = obj.get("usage") {
-                let input = usage.get("input_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
-                let output = usage.get("output_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
-                let cost = usage
-                    .get("cost")
-                    .and_then(|c| c.get("total"))
-                    .and_then(|v| v.as_f64())
-                    .unwrap_or(0.0);
-
-                last_cost += cost;
-                last_tokens += input + output;
-            }
-        }
-    }
-
-    if last_ts > 0.0 {
-        Some((
-            last_ts,
-            CronRunInfo {
-                timestamp: last_timestamp_str,
-                cost: last_cost,
-                tokens: last_tokens,
-                duration_ms: None,
-            },
-        ))
+    let next_run = if job.enabled {
+        estimate_next_run(&job.schedule, job.state.as_ref())
     } else {
         None
+    };
+
+    CronEntry {
+        id: job.id.clone(),
+        schedule: schedule_str,
+        agent: job.agent_id.clone(),
+        task: job.name.clone(),
+        enabled: job.enabled,
+        schedule_display,
+        last_run,
+        next_run,
+        status,
     }
 }
 
-/// Convert cron expression to human-readable text
-fn describe_cron(expr: &str) -> String {
+/// Convert job state to a CronRunInfo for the API response.
+fn state_to_run_info(state: &CronJobState) -> Option<CronRunInfo> {
+    let last_run_ms = state.last_run_at_ms?;
+    let secs = (last_run_ms / 1000) as i64;
+    let timestamp = chrono::DateTime::from_timestamp(secs, 0)
+        .map(|dt| dt.to_rfc3339())
+        .unwrap_or_default();
+
+    Some(CronRunInfo {
+        timestamp,
+        duration_ms: state.last_duration_ms,
+        last_status: state.last_status.clone(),
+    })
+}
+
+/// Canonical string representation of a schedule (used in CronEntry.schedule field).
+fn schedule_to_string(schedule: &CronSchedule) -> String {
+    match schedule {
+        CronSchedule::Interval { every_ms } => format!("interval:{every_ms}"),
+        CronSchedule::Cron { expr } => expr.clone(),
+    }
+}
+
+/// Human-readable schedule description for the UI.
+fn describe_schedule(schedule: &CronSchedule) -> String {
+    match schedule {
+        CronSchedule::Interval { every_ms } => describe_interval(*every_ms),
+        CronSchedule::Cron { expr } => describe_cron_expr(expr),
+    }
+}
+
+fn describe_interval(every_ms: u64) -> String {
+    let secs = every_ms / 1000;
+    if secs < 60 {
+        format!("Every {secs} seconds")
+    } else if secs < 3600 {
+        let mins = secs / 60;
+        format!("Every {mins} minutes")
+    } else if secs < 86400 {
+        let hours = secs / 3600;
+        if hours == 1 {
+            "Every hour".to_string()
+        } else {
+            format!("Every {hours} hours")
+        }
+    } else {
+        let days = secs / 86400;
+        if days == 1 {
+            "Every day".to_string()
+        } else {
+            format!("Every {days} days")
+        }
+    }
+}
+
+fn describe_cron_expr(expr: &str) -> String {
     let parts: Vec<&str> = expr.split_whitespace().collect();
     if parts.len() != 5 {
         return expr.to_string();
@@ -167,14 +115,13 @@ fn describe_cron(expr: &str) -> String {
 
     let (min, hour, _dom, _mon, dow) = (parts[0], parts[1], parts[2], parts[3], parts[4]);
 
-    // Common patterns
     if min.starts_with("*/") && hour == "*" {
-        let interval: u32 = min[2..].parse().unwrap_or(0);
+        let interval: u32 = min.strip_prefix("*/").and_then(|s| s.parse().ok()).unwrap_or(0);
         return format!("Every {interval} minutes");
     }
 
     if min == "0" && hour.starts_with("*/") {
-        let interval: u32 = hour[2..].parse().unwrap_or(0);
+        let interval: u32 = hour.strip_prefix("*/").and_then(|s| s.parse().ok()).unwrap_or(0);
         return format!("Every {interval} hours");
     }
 
@@ -199,64 +146,84 @@ fn describe_cron(expr: &str) -> String {
     expr.to_string()
 }
 
-/// Simple check if a cron job is overdue
-fn is_overdue(schedule: &str, last_run: &str) -> bool {
-    let Ok(last_dt) = chrono::DateTime::parse_from_rfc3339(last_run) else {
+/// Check if a job is overdue based on schedule and last-run state.
+fn is_overdue(schedule: &CronSchedule, state: &CronJobState) -> bool {
+    let Some(last_run_ms) = state.last_run_at_ms else {
         return false;
     };
-    let now = chrono::Utc::now();
-    let elapsed = now.signed_duration_since(last_dt);
-
-    let parts: Vec<&str> = schedule.split_whitespace().collect();
-    if parts.len() != 5 {
-        return false;
-    }
-
-    let (min, hour, _dom, _mon, dow) = (parts[0], parts[1], parts[2], parts[3], parts[4]);
-
-    // Determine expected interval
-    let expected_hours = if min.starts_with("*/") {
-        let interval: f64 = min.strip_prefix("*/").and_then(|s| s.parse().ok()).unwrap_or(60.0);
-        interval / 60.0
-    } else if hour.starts_with("*/") {
-        let interval: f64 = hour.strip_prefix("*/").and_then(|s| s.parse().ok()).unwrap_or(1.0);
-        interval
-    } else if dow != "*" {
-        // Weekly
-        7.0 * 24.0
-    } else {
-        // Daily
-        24.0
-    };
-
-    // Overdue if elapsed > 2x expected interval
-    let overdue_threshold = expected_hours * 2.0;
-    elapsed.num_minutes() as f64 / 60.0 > overdue_threshold
+    let now_ms = chrono::Utc::now().timestamp_millis() as u64;
+    let elapsed_ms = now_ms.saturating_sub(last_run_ms);
+    let expected_ms = schedule_interval_ms(schedule);
+    elapsed_ms > expected_ms * 2
 }
 
-/// Simple next run estimation
-fn estimate_next_run(schedule: &str) -> Option<String> {
-    let parts: Vec<&str> = schedule.split_whitespace().collect();
+/// Expected interval in milliseconds for overdue / next-run calculations.
+fn schedule_interval_ms(schedule: &CronSchedule) -> u64 {
+    match schedule {
+        CronSchedule::Interval { every_ms } => *every_ms,
+        CronSchedule::Cron { expr } => cron_expr_interval_ms(expr),
+    }
+}
+
+/// Rough interval estimate for a cron expression (used for overdue detection).
+fn cron_expr_interval_ms(expr: &str) -> u64 {
+    let parts: Vec<&str> = expr.split_whitespace().collect();
+    if parts.len() != 5 {
+        return 24 * 3600 * 1000;
+    }
+    let (min, hour, _, _, dow) = (parts[0], parts[1], parts[2], parts[3], parts[4]);
+
+    if min.starts_with("*/") {
+        let n: u64 = min.strip_prefix("*/").and_then(|s| s.parse().ok()).unwrap_or(60);
+        return n * 60 * 1000;
+    }
+    if hour.starts_with("*/") {
+        let n: u64 = hour.strip_prefix("*/").and_then(|s| s.parse().ok()).unwrap_or(1);
+        return n * 3600 * 1000;
+    }
+    if dow != "*" {
+        return 7 * 24 * 3600 * 1000;
+    }
+    24 * 3600 * 1000
+}
+
+/// Estimate the next run time.
+/// For intervals: last_run + interval. For cron exprs: simple time math.
+fn estimate_next_run(schedule: &CronSchedule, state: Option<&CronJobState>) -> Option<String> {
+    match schedule {
+        CronSchedule::Interval { every_ms } => {
+            let last_ms = state
+                .and_then(|s| s.last_run_at_ms)
+                .unwrap_or_else(|| chrono::Utc::now().timestamp_millis() as u64);
+            let next_ms = last_ms + every_ms;
+            let secs = (next_ms / 1000) as i64;
+            chrono::DateTime::from_timestamp(secs, 0).map(|dt| dt.to_rfc3339())
+        }
+        CronSchedule::Cron { expr } => estimate_next_cron(expr),
+    }
+}
+
+fn estimate_next_cron(expr: &str) -> Option<String> {
+    let parts: Vec<&str> = expr.split_whitespace().collect();
     if parts.len() != 5 {
         return None;
     }
 
     let now = chrono::Utc::now();
-
-    let (min_part, hour_part, _dom, _mon, _dow) = (parts[0], parts[1], parts[2], parts[3], parts[4]);
+    let (min_part, hour_part, ..) = (parts[0], parts[1], parts[2], parts[3], parts[4]);
 
     if min_part.starts_with("*/") {
-        // Every N minutes
-        let interval: i64 = min_part.strip_prefix("*/").and_then(|s| s.parse().ok()).unwrap_or(30);
+        let interval: i64 = min_part
+            .strip_prefix("*/")
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(30);
         let current_min = now.format("%M").to_string().parse::<i64>().unwrap_or(0);
         let next_min = ((current_min / interval) + 1) * interval;
-        let delta = next_min - current_min;
-        let next = now + chrono::Duration::minutes(delta);
+        let next = now + chrono::Duration::minutes(next_min - current_min);
         return Some(next.to_rfc3339());
     }
 
     if hour_part != "*" && min_part != "*" {
-        // Daily at specific time
         let h: u32 = hour_part.parse().unwrap_or(0);
         let m: u32 = min_part.parse().unwrap_or(0);
         let today = now.date_naive();
@@ -265,10 +232,8 @@ fn estimate_next_run(schedule: &str) -> Option<String> {
         if next_dt > now {
             return Some(next_dt.to_rfc3339());
         }
-        // Tomorrow
         let tomorrow = today.succ_opt()?;
-        let next_time = tomorrow.and_hms_opt(h, m, 0)?;
-        return Some(next_time.and_utc().to_rfc3339());
+        return Some(tomorrow.and_hms_opt(h, m, 0)?.and_utc().to_rfc3339());
     }
 
     None
