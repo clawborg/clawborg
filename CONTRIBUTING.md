@@ -1,78 +1,99 @@
 # Contributing to ClawBorg
 
-Thanks for your interest in contributing! Here's how to get started.
+Thanks for your interest in contributing to ClawBorg! This guide will help you get started.
 
-## Development Setup
+## Getting Started
 
-### Prerequisites
-- Rust 1.75+ (`rustup install stable`)
-- Node.js 20+ and pnpm (`npm i -g pnpm`)
-- An OpenClaw installation at `~/.openclaw/`, or use the mock fixtures
+1. Fork the repository
+2. Clone your fork: `git clone git@github.com:YOUR_USERNAME/clawborg.git`
+3. Run the setup script: `bash scripts/setup.sh`
+4. Create a branch: `git checkout -b fix/your-change`
 
-### Build & Run
+## Prerequisites
+
+- Rust (install via https://rustup.rs)
+- Node.js 18+ and pnpm (install via `npm i -g pnpm`)
+- Git
+
+## Development Workflow
 
 ```bash
-# Clone
-git clone https://github.com/clawborg/clawborg
-cd clawborg
-
-# Backend (Rust)
+# Start the API server with mock data
 cargo run -- --dir ./fixtures/mock-openclaw
 
-# Frontend (React) -- in a separate terminal
+# In another terminal, start the frontend dev server
+cd web && pnpm dev
+
+# Open http://localhost:3103 (Vite proxies API to 3104)
+```
+
+## Making Changes
+
+### Backend (Rust)
+
+Source code is in `crates/clawborg/src/`. After changes:
+
+```bash
+cargo check          # fast type check
+cargo clippy         # lint
+cargo run -- --dir ./fixtures/mock-openclaw   # test
+```
+
+### Frontend (React)
+
+Source code is in `web/src/`. The Vite dev server auto-reloads on save. Before committing:
+
+```bash
 cd web
-pnpm install
-pnpm dev   # Vite dev server on :3103, proxies API to :3104
+pnpm tsc --noEmit    # type check
 ```
 
-### Project Structure
+### Both
 
-```
-crates/clawborg/src/     # Rust backend
-  main.rs                # CLI entry point
-  server.rs              # Axum server setup
-  routes/                # API route handlers
-  openclaw/              # OpenClaw filesystem readers
-  watcher.rs             # File system watcher (notify)
-  ws.rs                  # WebSocket handler
+When changing both backend and frontend, rebuild the full binary to verify the embedded frontend works:
 
-web/src/                 # React frontend
-  pages/                 # Page components
-  components/            # Shared UI components (PageLayout, etc.)
-  hooks/                 # Custom React hooks
-  api/                   # API client + WebSocket
+```bash
+cd web && pnpm build && cd ..
+cargo build --release
+./target/release/clawborg --dir ./fixtures/mock-openclaw
 ```
 
-## Guidelines
+## Commit Messages
 
-1. **Filesystem-first** -- No database. Read/write `~/.openclaw/` directly.
-2. **Standard OpenClaw** -- Follow official structure from docs.openclaw.ai, not custom patterns.
-3. **Write safety** -- Only markdown files are writable. Always validate paths.
-4. **Token redaction** -- Never expose API keys or tokens through the API.
-5. **Responsive** -- All UI changes must work across mobile, tablet, laptop, desktop.
-
-## Commits
-
-Use conventional commit prefixes. See [VERSIONING.md](./VERSIONING.md) for the full table.
+We use conventional commits:
 
 ```
-feat: add cost dashboard
-fix: file watcher crash on symlinks
-docs: update setup instructions
+feat: add session pagination
+fix: daily cost trend timezone alignment
+chore: update dependencies
+docs: improve quickstart guide
 ```
 
 ## Pull Requests
 
-- Fork, branch from `main`, PR back to `main`
-- Run `cargo clippy` and `cargo fmt` before submitting
-- Run `cd web && pnpm lint && pnpm build` for frontend checks
-- Include tests for new features
-- Update CHANGELOG.md under `[Unreleased]`
+1. Make sure your branch is up to date with main
+2. One logical change per PR
+3. Include a clear description of what changed and why
+4. PRs are reviewed by Greptile (automated) and a maintainer
+5. Squash merge into main
 
-## Releases
+## Fixtures
 
-See [VERSIONING.md](./VERSIONING.md) for version bump rules and release checklist.
+`fixtures/mock-openclaw/` contains mock data. If your change needs new fixture data, add it there and document what you added.
+
+## Code Review
+
+All PRs go through automated review via Greptile plus manual review. Common things we look for:
+
+- No panics in production code paths (use proper error handling)
+- TypeScript strict mode compliance (no `any` types)
+- Changes work with both mock fixtures and real OpenClaw installations
+- Frontend changes are responsive
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under AGPL-3.0.
+By contributing, you agree that your contributions will be licensed under the AGPL-3.0 license.
+
+## Questions?
+
+Open an issue or reach out on Twitter: [@clawborgdev](https://x.com/clawborgdev)
