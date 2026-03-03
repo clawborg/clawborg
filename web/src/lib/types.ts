@@ -27,6 +27,22 @@ export interface AgentDetail {
   directories: string[];
   health: AgentHealth;
   isDefault: boolean;
+  /** Extra directory sections from openclaw.json (agentDir, skills.load.extraDirs) */
+  extraSections: DirSection[];
+}
+
+export interface DirSection {
+  label: string;
+  path: string;
+  files: Record<string, FileInfo>;
+  directories: string[];
+}
+
+export interface DirListing {
+  path: string;
+  baseLabel: string;
+  files: Record<string, FileInfo>;
+  directories: string[];
 }
 
 export interface FileInfo {
@@ -145,6 +161,16 @@ export interface CronEntry {
   lastRun: CronRunInfo | null;
   nextRun: string | null;
   status: 'ok' | 'overdue' | 'disabled' | 'unknown';
+  // Detail fields
+  sessionKey: string | null;
+  sessionTarget: string | null;
+  wakeMode: string | null;
+  payloadMessage: string | null;
+  deliveryMode: string | null;
+  deliveryChannel: string | null;
+  deliveryTo: string | null;
+  consecutiveErrors: number | null;
+  lastError: string | null;
 }
 
 export interface CronRunInfo {

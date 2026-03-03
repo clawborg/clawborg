@@ -6,6 +6,7 @@ import type {
   UsageSummary,
   CronEntry,
   Alert,
+  DirListing,
 } from "@/lib/types";
 
 const BASE = "/api";
@@ -40,10 +41,28 @@ export const fetchAgent = (id: string) => get<AgentDetail>(`/agents/${id}`);
 
 // ─── Files ───
 
-export const fetchFile = (agentId: string, filename: string) =>
-  get<{ filename: string; content: string }>(
-    `/agents/${agentId}/files/${filename}`
+export const fetchFile = (
+  agentId: string,
+  subpath: string,
+  section?: string
+) => {
+  const qs = section ? `?section=${encodeURIComponent(section)}` : "";
+  return get<{ filename: string; content: string }>(
+    `/agents/${agentId}/files/${subpath}${qs}`
   );
+};
+
+export const fetchDirListing = (
+  agentId: string,
+  path?: string,
+  section?: string
+) => {
+  const params = new URLSearchParams();
+  if (path) params.set("path", path);
+  if (section) params.set("section", section);
+  const qs = params.toString() ? `?${params}` : "";
+  return get<DirListing>(`/agents/${agentId}/browse${qs}`);
+};
 
 export const updateFile = (
   agentId: string,

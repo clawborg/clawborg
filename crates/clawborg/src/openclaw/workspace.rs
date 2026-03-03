@@ -1,7 +1,7 @@
 use crate::types::*;
 use chrono::{DateTime, Utc};
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Component, Path, PathBuf};
 
 
 /// Build an AgentSummary from a ResolvedAgent
@@ -48,6 +48,18 @@ pub fn build_agent_detail(agent: &ResolvedAgent) -> AgentDetail {
     let directories = discover_directories(ws);
     let health = check_agent_health(agent);
 
+    // Build extra sections from named dirs (agentDir, skills, etc.)
+    let extra_sections = agent
+        .named_dirs
+        .iter()
+        .map(|nd| DirSection {
+            label: nd.label.clone(),
+            path: nd.path.to_string_lossy().to_string(),
+            files: discover_workspace_files(&nd.path),
+            directories: discover_directories(&nd.path),
+        })
+        .collect();
+
     AgentDetail {
         id: agent.id.clone(),
         name: resolve_agent_name(agent),
@@ -59,10 +71,40 @@ pub fn build_agent_detail(agent: &ResolvedAgent) -> AgentDetail {
         directories,
         health,
         is_default: agent.is_default,
+        extra_sections,
     }
 }
 
-/// Discover ALL .md files in workspace root (not hardcoded)
+/// Browse a sub-directory within any of an agent's registered base paths.
+/// `base_path` must be one of workspace_path or a named_dir path (validated by caller).
+/// `subpath` is the relative path within that base (empty = root of base).
+pub fn browse_workspace_dir(
+    base_path: &Path,
+    subpath: &str,
+    base_label: &str,
+) -> anyhow::Result<DirListing> {
+    let target = if subpath.is_empty() {
+        base_path.to_path_buf()
+    } else {
+        safe_subpath(base_path, subpath)?
+    };
+
+    if !target.exists() {
+        anyhow::bail!("Directory not found: {subpath}");
+    }
+    if !target.is_dir() {
+        anyhow::bail!("Not a directory: {subpath}");
+    }
+
+    Ok(DirListing {
+        path: subpath.to_string(),
+        base_label: base_label.to_string(),
+        files: discover_workspace_files(&target),
+        directories: discover_directories(&target),
+    })
+}
+
+/// Discover ALL supported files in a directory (not hardcoded)
 fn discover_workspace_files(workspace_path: &Path) -> HashMap<String, FileInfo> {
     let mut files = HashMap::new();
 
@@ -89,7 +131,7 @@ fn discover_workspace_files(workspace_path: &Path) -> HashMap<String, FileInfo> 
     files
 }
 
-/// Discover subdirectories in workspace (memory/, skills/, tasks/, etc.)
+/// Discover subdirectories (non-hidden) in a directory
 fn discover_directories(workspace_path: &Path) -> Vec<String> {
     let mut dirs = Vec::new();
 
@@ -104,7 +146,6 @@ fn discover_directories(workspace_path: &Path) -> Vec<String> {
     for entry in entries.filter_map(|e| e.ok()) {
         if entry.path().is_dir() {
             let name = entry.file_name().to_string_lossy().to_string();
-            // Skip hidden directories
             if !name.starts_with('.') {
                 dirs.push(name);
             }
@@ -120,10 +161,7 @@ fn get_file_info(path: &Path) -> FileInfo {
     match std::fs::metadata(path) {
         Ok(meta) => {
             let size = meta.len();
-            let modified = meta
-                .modified()
-                .ok()
-                .map(DateTime::<Utc>::from);
+            let modified = meta.modified().ok().map(DateTime::<Utc>::from);
             FileInfo {
                 exists: true,
                 size_bytes: size,
@@ -185,15 +223,12 @@ fn count_sessions(agent: &ResolvedAgent) -> usize {
 /// Try to resolve a display name for an agent.
 /// Priority: config name > IDENTITY.md > AGENTS.md first heading > None
 fn resolve_agent_name(agent: &ResolvedAgent) -> Option<String> {
-    // 1. Config provides a name
     if agent.name.is_some() {
         return agent.name.clone();
     }
 
-    // 2. Try IDENTITY.md
     let identity_path = agent.workspace_path.join("IDENTITY.md");
     if let Ok(content) = std::fs::read_to_string(&identity_path) {
-        // Look for "Name:" or first # heading
         for line in content.lines() {
             let trimmed = line.trim();
             if let Some(name) = trimmed.strip_prefix("Name:") {
@@ -215,12 +250,10 @@ fn resolve_agent_name(agent: &ResolvedAgent) -> Option<String> {
 }
 
 /// Run health checks on a single agent.
-/// Uses generic detection rather than hardcoded file expectations.
 pub fn check_agent_health(agent: &ResolvedAgent) -> AgentHealth {
     let mut issues = Vec::new();
     let ws = &agent.workspace_path;
 
-    // ── Check 1: Workspace exists? ──
     if !ws.exists() {
         issues.push(HealthIssue {
             severity: IssueSeverity::Critical,
@@ -236,13 +269,9 @@ pub fn check_agent_health(agent: &ResolvedAgent) -> AgentHealth {
         };
     }
 
-    // ── Check 2: Has any bootstrap/instruction files? ──
-    // Standard OpenClaw uses AGENTS.md + SOUL.md. Some setups use variants.
     let has_agents_md = ws.join("AGENTS.md").exists();
     let has_soul_md = ws.join("SOUL.md").exists();
-    let has_any_instruction = has_agents_md || has_soul_md;
-
-    if !has_any_instruction {
+    if !has_agents_md && !has_soul_md {
         issues.push(HealthIssue {
             severity: IssueSeverity::Critical,
             message: "No instruction files found (AGENTS.md or SOUL.md)".to_string(),
@@ -250,12 +279,7 @@ pub fn check_agent_health(agent: &ResolvedAgent) -> AgentHealth {
         });
     }
 
-    // ── Check 3: Empty instruction files ──
-    // Standard OpenClaw bootstrap files that should not be empty
-    let instruction_files = [
-        "AGENTS.md", "SOUL.md",
-    ];
-    for fname in instruction_files {
+    for fname in ["AGENTS.md", "SOUL.md"] {
         let fpath = ws.join(fname);
         if fpath.exists() && file_is_empty(&fpath) {
             issues.push(HealthIssue {
@@ -266,10 +290,8 @@ pub fn check_agent_health(agent: &ResolvedAgent) -> AgentHealth {
         }
     }
 
-    // ── Check 4: Identity check ──
     let has_identity = ws.join("IDENTITY.md").exists();
     if !has_identity && agent.name.is_none() {
-        // Only warn if no identity source at all
         issues.push(HealthIssue {
             severity: IssueSeverity::Info,
             message: "No IDENTITY.md and no name in config".to_string(),
@@ -277,7 +299,6 @@ pub fn check_agent_health(agent: &ResolvedAgent) -> AgentHealth {
         });
     }
 
-    // ── Check 5: Memory files ──
     let has_memory_md = ws.join("MEMORY.md").exists() || ws.join("memory.md").exists();
     let has_memory_dir = ws.join("memory").exists();
     if !has_memory_md && !has_memory_dir {
@@ -288,7 +309,6 @@ pub fn check_agent_health(agent: &ResolvedAgent) -> AgentHealth {
         });
     }
 
-    // ── Check 6: Stale pending tasks (if task queue exists) ──
     let pending_dir = ws.join("tasks").join("pending");
     if pending_dir.exists() {
         if let Ok(entries) = std::fs::read_dir(&pending_dir) {
@@ -305,9 +325,7 @@ pub fn check_agent_health(agent: &ResolvedAgent) -> AgentHealth {
                                     "Stale pending task: {} (>48h old)",
                                     entry.file_name().to_string_lossy()
                                 ),
-                                file: Some(
-                                    entry.file_name().to_string_lossy().to_string(),
-                                ),
+                                file: Some(entry.file_name().to_string_lossy().to_string()),
                             });
                         }
                     }
@@ -316,19 +334,14 @@ pub fn check_agent_health(agent: &ResolvedAgent) -> AgentHealth {
         }
     }
 
-    // ── Check 7: Session health ──
-    if agent.sessions_dir.exists() {
-        let session_count = count_sessions(agent);
-        if session_count == 0 {
-            issues.push(HealthIssue {
-                severity: IssueSeverity::Info,
-                message: "No session files found".to_string(),
-                file: None,
-            });
-        }
+    if agent.sessions_dir.exists() && count_sessions(agent) == 0 {
+        issues.push(HealthIssue {
+            severity: IssueSeverity::Info,
+            message: "No session files found".to_string(),
+            file: None,
+        });
     }
 
-    // ── Determine overall status ──
     let status = if issues.iter().any(|i| matches!(i.severity, IssueSeverity::Critical)) {
         HealthStatus::Critical
     } else if issues.iter().any(|i| matches!(i.severity, IssueSeverity::Warning)) {
@@ -346,44 +359,33 @@ fn file_is_empty(path: &Path) -> bool {
         .unwrap_or(true)
 }
 
-/// Read a file from an agent's workspace
-pub fn read_workspace_file(
-    workspace_path: &Path,
-    filename: &str,
-) -> anyhow::Result<String> {
-    // Security: prevent path traversal
-    if filename.contains("..") || filename.contains('/') || filename.contains('\\') {
-        anyhow::bail!("Invalid filename: path traversal not allowed");
-    }
-
-    let file_path = workspace_path.join(filename);
+/// Read a file at a sub-path within a base directory.
+/// Supports nested paths (e.g. "memory/2026-03-01.md").
+/// Rejects path traversal attempts.
+pub fn read_workspace_file(base_path: &Path, subpath: &str) -> anyhow::Result<String> {
+    let file_path = safe_subpath(base_path, subpath)?;
     if !file_path.exists() {
-        anyhow::bail!("File not found: {filename}");
+        anyhow::bail!("File not found: {subpath}");
+    }
+    if !file_path.is_file() {
+        anyhow::bail!("Not a file: {subpath}");
     }
     Ok(std::fs::read_to_string(file_path)?)
 }
 
 /// Write content to a workspace file.
-/// By default, only .md files in the workspace root are writable.
-/// Creates auto-backup before overwrite.
+/// Only .md files are writable. Creates auto-backup before overwrite.
 pub fn write_workspace_file(
     workspace_path: &Path,
-    filename: &str,
+    subpath: &str,
     content: &str,
 ) -> anyhow::Result<()> {
-    // Security: prevent path traversal
-    if filename.contains("..") || filename.contains('/') || filename.contains('\\') {
-        anyhow::bail!("Invalid filename: path traversal not allowed");
-    }
-
-    // Only allow .md files
-    if !filename.ends_with(".md") {
+    if !subpath.ends_with(".md") {
         anyhow::bail!("Only .md files are writable from ClawBorg");
     }
 
-    let file_path = workspace_path.join(filename);
+    let file_path = safe_subpath(workspace_path, subpath)?;
 
-    // Auto-backup before overwrite
     if file_path.exists() {
         let backup_path = file_path.with_extension("md.bak");
         std::fs::copy(&file_path, &backup_path)?;
@@ -391,4 +393,18 @@ pub fn write_workspace_file(
 
     std::fs::write(&file_path, content)?;
     Ok(())
+}
+
+/// Validate and resolve a sub-path within a base directory.
+/// Rejects any component that would escape the base (ParentDir, RootDir, etc.).
+fn safe_subpath(base: &Path, subpath: &str) -> anyhow::Result<PathBuf> {
+    for component in Path::new(subpath).components() {
+        match component {
+            Component::ParentDir | Component::RootDir | Component::Prefix(_) => {
+                anyhow::bail!("Invalid path: traversal not allowed");
+            }
+            _ => {}
+        }
+    }
+    Ok(base.join(subpath))
 }

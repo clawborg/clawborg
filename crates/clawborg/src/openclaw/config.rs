@@ -87,6 +87,7 @@ pub fn resolve_agents(
                             workspace_path: ws_path,
                             sessions_dir,
                             is_default,
+                            named_dirs: resolve_named_dirs(entry, openclaw_dir),
                         }
                     })
                     .collect();
@@ -160,7 +161,41 @@ fn single_agent(
         workspace_path: workspace_path.to_path_buf(),
         sessions_dir: agents_state_dir.join(id).join("sessions"),
         is_default: true,
+        named_dirs: vec![],
     }
+}
+
+/// Extract named extra directories from an agent config entry.
+/// Reads agentDir and skills.load.extraDirs, resolving paths against openclaw_dir.
+fn resolve_named_dirs(entry: &AgentEntry, openclaw_dir: &Path) -> Vec<NamedDir> {
+    let mut dirs = Vec::new();
+
+    if let Some(agent_dir) = &entry.agent_dir {
+        let path = resolve_tilde(agent_dir, openclaw_dir);
+        dirs.push(NamedDir {
+            label: "Agent Dir".to_string(),
+            path,
+        });
+    }
+
+    if let Some(skills) = &entry.skills {
+        if let Some(load) = &skills.load {
+            if let Some(extra_dirs) = &load.extra_dirs {
+                let multi = extra_dirs.len() > 1;
+                for (i, dir) in extra_dirs.iter().enumerate() {
+                    let path = resolve_tilde(dir, openclaw_dir);
+                    let label = if multi {
+                        format!("Skills ({})", i + 1)
+                    } else {
+                        "Skills".to_string()
+                    };
+                    dirs.push(NamedDir { label, path });
+                }
+            }
+        }
+    }
+
+    dirs
 }
 
 /// Last resort: scan filesystem for agent directories
@@ -181,6 +216,7 @@ fn detect_agents_from_filesystem(
             workspace_path: default_workspace.to_path_buf(),
             sessions_dir: agents_state_dir.join("main").join("sessions"),
             is_default: true,
+            named_dirs: vec![],
         });
     }
 
@@ -201,6 +237,7 @@ fn detect_agents_from_filesystem(
                     workspace_path: openclaw_dir.join(format!("workspace-{id}")),
                     sessions_dir,
                     is_default: false,
+                    named_dirs: vec![],
                 });
             }
         }
