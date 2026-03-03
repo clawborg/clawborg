@@ -1,3 +1,4 @@
+use crate::cache;
 use crate::routes;
 use crate::types::AppState;
 use crate::watcher;
@@ -9,7 +10,8 @@ use axum::routing::get;
 use axum::Router;
 use rust_embed::Embed;
 use std::path::PathBuf;
-use tokio::sync::broadcast;
+use std::sync::Arc;
+use tokio::sync::{broadcast, RwLock};
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 
@@ -32,19 +34,30 @@ pub async fn run(config: ServerConfig) -> anyhow::Result<()> {
     let (file_events_tx, _) = broadcast::channel::<crate::types::FileChangeEvent>(256);
     let clawborg_config = crate::clawborg_config::load();
 
+    // Load initial cache from disk
+    let initial_cache = {
+        let agents = crate::openclaw::config::read_config(&config.openclaw_dir)
+            .map(|cfg| crate::openclaw::config::resolve_agents(&cfg, &config.openclaw_dir))
+            .unwrap_or_default();
+        cache::load_cache(&agents, &config.openclaw_dir)
+    };
+    let app_cache = Arc::new(RwLock::new(initial_cache));
+
     let state = AppState {
         openclaw_dir: config.openclaw_dir.clone(),
         readonly: config.readonly,
         file_events_tx: file_events_tx.clone(),
         clawborg_config,
+        cache: app_cache.clone(),
     };
 
     // Start file watcher if enabled
     if config.watch_enabled {
         let watcher_dir = config.openclaw_dir.clone();
         let watcher_tx = file_events_tx.clone();
+        let watcher_cache = app_cache.clone();
         tokio::spawn(async move {
-            if let Err(e) = watcher::start_watching(watcher_dir, watcher_tx).await {
+            if let Err(e) = watcher::start_watching(watcher_dir, watcher_tx, watcher_cache).await {
                 tracing::error!("File watcher error: {e}");
             }
         });

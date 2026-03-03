@@ -3,7 +3,39 @@ use std::collections::HashMap;
 use std::io::BufRead;
 use std::path::Path;
 
+/// Read all sessions from cache, falling back to disk for agents without cached sessions.
+pub fn read_sessions_from_cache(
+    sessions_cache: &HashMap<String, HashMap<String, SessionEntry>>,
+    agents: &[ResolvedAgent],
+) -> Vec<SessionSummary> {
+    let mut all_sessions = Vec::new();
+
+    for agent in agents {
+        if let Some(session_map) = sessions_cache.get(&agent.id) {
+            // Use cached sessions.json data
+            let summaries: Vec<SessionSummary> = session_map
+                .iter()
+                .map(|(key, entry)| entry_to_summary(&agent.id, key, entry.clone()))
+                .collect();
+            all_sessions.extend(summaries);
+        } else {
+            // Fall back to disk (JSONL or sessions.json)
+            all_sessions.extend(read_agent_sessions(agent));
+        }
+    }
+
+    all_sessions.sort_by(|a, b| {
+        b.last_active
+            .unwrap_or(0.0)
+            .partial_cmp(&a.last_active.unwrap_or(0.0))
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    all_sessions
+}
+
 /// Read all sessions across all resolved agents
+#[allow(dead_code)]
 pub fn read_all_sessions(agents: &[ResolvedAgent]) -> Vec<SessionSummary> {
     let mut all_sessions = Vec::new();
 

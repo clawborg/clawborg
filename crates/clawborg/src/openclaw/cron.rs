@@ -1,8 +1,14 @@
 use crate::types::*;
 use std::path::Path;
 
+/// Build cron entries from cached job definitions (no disk I/O).
+pub fn build_cron_list_from_jobs(jobs: &[CronJobEntry]) -> Vec<CronEntry> {
+    jobs.iter().map(job_to_entry).collect()
+}
+
 /// Build cron entries by reading ~/.openclaw/cron/jobs.json.
 /// Last-run info comes from the `state` object embedded in each job.
+#[allow(dead_code)]
 pub fn build_cron_list(openclaw_dir: &Path, _agents: &[ResolvedAgent]) -> Vec<CronEntry> {
     let jobs_path = openclaw_dir.join("cron").join("jobs.json");
 
