@@ -40,17 +40,11 @@ function timeAgo(isoStr: string): string {
   return `${days}d ago`;
 }
 
-function fmtCost(n: number): string {
-  if (n >= 1) return `$${n.toFixed(2)}`;
-  if (n >= 0.01) return `$${n.toFixed(3)}`;
-  if (n > 0) return `$${n.toFixed(4)}`;
-  return "$0.00";
-}
-
-function fmtTokens(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
-  return n.toString();
+function fmtDuration(ms: number | null): string {
+  if (ms === null || ms === undefined) return "";
+  if (ms < 1_000) return `${ms}ms`;
+  if (ms < 60_000) return `${(ms / 1_000).toFixed(1)}s`;
+  return `${(ms / 60_000).toFixed(1)}m`;
 }
 
 /* ─── Crons Page ─── */
@@ -113,9 +107,9 @@ export default function Crons() {
         </div>
       ) : (
         <div className="space-y-3">
-          {crons.map((cron, i) => (
+          {crons.map((cron) => (
             <div
-              key={i}
+              key={cron.id}
               className={`bg-gray-900 border rounded-xl p-4 ${
                 cron.enabled ? "border-gray-800" : "border-gray-800/50 opacity-60"
               }`}
@@ -130,11 +124,6 @@ export default function Crons() {
                       <span className="text-xs text-gray-500">
                         Agent: <span className="text-gray-400">{cron.agent}</span>
                       </span>
-                      {cron.deleteAfterRun && (
-                        <span className="text-xs bg-gray-800 text-gray-500 px-1.5 py-0.5 rounded">
-                          ephemeral
-                        </span>
-                      )}
                     </div>
                   </div>
                 </div>
@@ -158,11 +147,14 @@ export default function Crons() {
                     <>
                       <span className="text-gray-300">{timeAgo(cron.lastRun.timestamp)}</span>
                       <span className="text-xs text-gray-600 block">
-                        {fmtCost(cron.lastRun.cost)} · {fmtTokens(cron.lastRun.tokens)} tokens
+                        {cron.lastRun.lastStatus ?? "—"}
+                        {cron.lastRun.durationMs !== null && cron.lastRun.durationMs !== undefined
+                          ? ` · ${fmtDuration(cron.lastRun.durationMs)}`
+                          : ""}
                       </span>
                     </>
                   ) : (
-                    <span className="text-gray-500">—</span>
+                    <span className="text-gray-500">Never</span>
                   )}
                 </div>
                 <div>
