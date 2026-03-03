@@ -12,7 +12,7 @@ Thanks for your interest in contributing to ClawBorg! This guide will help you g
 ## Prerequisites
 
 - Rust (install via https://rustup.rs)
-- Node.js 18+ and pnpm (install via `npm i -g pnpm`)
+- Node.js 20+ and pnpm (install via `npm i -g pnpm`)
 - Git
 
 ## Development Workflow
