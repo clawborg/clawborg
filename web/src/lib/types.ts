@@ -124,6 +124,7 @@ export interface UsageSummary {
   totalInputTokens: number;
   totalOutputTokens: number;
   totalCacheReadTokens: number;
+  totalCacheWriteTokens: number;
   byModel: ModelCost[];
   byAgent: AgentCost[];
   dailyTrend: DailyCost[];

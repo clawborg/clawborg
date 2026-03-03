@@ -51,7 +51,7 @@ function DailyTrendChart({ data }: { data: { date: string; cost: number }[] }) {
         {data.map((d) => {
           const h = Math.max(2, (d.cost / maxCost) * 100);
           return (
-            <div key={d.date} className="flex flex-col items-center group relative">
+            <div key={d.date} className="h-full flex flex-col items-center justify-end group relative">
               {/* Tooltip */}
               <div className="absolute -top-8 hidden group-hover:block bg-gray-800 border border-gray-700 text-xs px-2 py-1 rounded whitespace-nowrap z-10">
                 {d.date}: {fmtCost(d.cost)}
@@ -107,7 +107,11 @@ export default function Usage() {
     );
   }
 
-  const totalTokens = usage.totalInputTokens + usage.totalOutputTokens;
+  const totalTokens =
+    usage.totalInputTokens +
+    usage.totalOutputTokens +
+    usage.totalCacheReadTokens +
+    usage.totalCacheWriteTokens;
   const maxModelCost = Math.max(...usage.byModel.map((m) => m.cost), 0.01);
   const maxAgentCost = Math.max(...usage.byAgent.map((a) => a.cost), 0.01);
 

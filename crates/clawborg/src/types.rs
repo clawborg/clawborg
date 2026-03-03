@@ -405,6 +405,8 @@ pub struct UsageSummary {
     pub total_output_tokens: u64,
     /// Total cache read tokens
     pub total_cache_read_tokens: u64,
+    /// Total cache write (creation) tokens
+    pub total_cache_write_tokens: u64,
     /// Per-model cost breakdown
     pub by_model: Vec<ModelCost>,
     /// Per-agent cost breakdown
