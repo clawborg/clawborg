@@ -465,7 +465,7 @@ pub struct CronJobState {
     #[serde(default)]
     pub last_error: Option<String>,
     #[serde(default)]
-    pub last_delivered: Option<u64>,
+    pub last_delivered: Option<serde_json::Value>,
     #[serde(default)]
     pub last_delivery_status: Option<String>,
 }
