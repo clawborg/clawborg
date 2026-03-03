@@ -70,16 +70,16 @@ fn state_to_run_info(state: &CronJobState) -> Option<CronRunInfo> {
 /// Canonical string representation of a schedule (used in CronEntry.schedule field).
 fn schedule_to_string(schedule: &CronSchedule) -> String {
     match schedule {
-        CronSchedule::Interval { every_ms } => format!("interval:{every_ms}"),
-        CronSchedule::Cron { expr } => expr.clone(),
+        CronSchedule::Every { every_ms, .. } => format!("every:{every_ms}"),
+        CronSchedule::Cron { expr, .. } => expr.clone(),
     }
 }
 
 /// Human-readable schedule description for the UI.
 fn describe_schedule(schedule: &CronSchedule) -> String {
     match schedule {
-        CronSchedule::Interval { every_ms } => describe_interval(*every_ms),
-        CronSchedule::Cron { expr } => describe_cron_expr(expr),
+        CronSchedule::Every { every_ms, .. } => describe_interval(*every_ms),
+        CronSchedule::Cron { expr, .. } => describe_cron_expr(expr),
     }
 }
 
@@ -160,8 +160,8 @@ fn is_overdue(schedule: &CronSchedule, state: &CronJobState) -> bool {
 /// Expected interval in milliseconds for overdue / next-run calculations.
 fn schedule_interval_ms(schedule: &CronSchedule) -> u64 {
     match schedule {
-        CronSchedule::Interval { every_ms } => *every_ms,
-        CronSchedule::Cron { expr } => cron_expr_interval_ms(expr),
+        CronSchedule::Every { every_ms, .. } => *every_ms,
+        CronSchedule::Cron { expr, .. } => cron_expr_interval_ms(expr),
     }
 }
 
@@ -191,7 +191,7 @@ fn cron_expr_interval_ms(expr: &str) -> u64 {
 /// For intervals: last_run + interval. For cron exprs: simple time math.
 fn estimate_next_run(schedule: &CronSchedule, state: Option<&CronJobState>) -> Option<String> {
     match schedule {
-        CronSchedule::Interval { every_ms } => {
+        CronSchedule::Every { every_ms, .. } => {
             let last_ms = state
                 .and_then(|s| s.last_run_at_ms)
                 .unwrap_or_else(|| chrono::Utc::now().timestamp_millis() as u64);
@@ -199,7 +199,7 @@ fn estimate_next_run(schedule: &CronSchedule, state: Option<&CronJobState>) -> O
             let secs = (next_ms / 1000) as i64;
             chrono::DateTime::from_timestamp(secs, 0).map(|dt| dt.to_rfc3339())
         }
-        CronSchedule::Cron { expr } => estimate_next_cron(expr),
+        CronSchedule::Cron { expr, .. } => estimate_next_cron(expr),
     }
 }
 

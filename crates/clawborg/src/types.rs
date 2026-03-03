@@ -408,6 +408,8 @@ pub struct CronJobEntry {
     #[serde(default)]
     pub session_target: Option<String>,
     #[serde(default)]
+    pub session_key: Option<String>,
+    #[serde(default)]
     pub wake_mode: Option<String>,
     #[serde(default)]
     pub payload: Option<CronJobPayload>,
@@ -415,16 +417,32 @@ pub struct CronJobEntry {
     pub delivery: Option<CronJobDelivery>,
     #[serde(default)]
     pub state: Option<CronJobState>,
+    #[serde(default)]
+    pub notify: Option<serde_json::Value>,
+    #[serde(default)]
+    pub created_at_ms: Option<u64>,
+    #[serde(default)]
+    pub updated_at_ms: Option<u64>,
 }
 
-/// Schedule definition — either a fixed interval or a cron expression
+/// Schedule definition — either a fixed interval or a cron expression.
+/// Real OpenClaw kinds: "every" (interval) or "cron" (cron expression).
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum CronSchedule {
-    /// e.g. { "kind": "interval", "everyMs": 1800000 }
-    Interval { every_ms: u64 },
-    /// e.g. { "kind": "cron", "expr": "0 8 * * *" }
-    Cron { expr: String },
+    /// e.g. { "kind": "every", "everyMs": 1800000, "anchorMs": 0 }
+    Every {
+        every_ms: u64,
+        #[serde(default)]
+        anchor_ms: Option<u64>,
+    },
+    /// e.g. { "kind": "cron", "expr": "0 8 * * *", "tz": "UTC" }
+    Cron {
+        expr: String,
+        #[serde(default)]
+        tz: Option<String>,
+    },
 }
 
 /// Runtime state stored by OpenClaw after each job execution
@@ -440,6 +458,14 @@ pub struct CronJobState {
     pub last_duration_ms: Option<u64>,
     #[serde(default)]
     pub consecutive_errors: u32,
+    #[serde(default)]
+    pub next_run_at_ms: Option<u64>,
+    #[serde(default)]
+    pub last_error: Option<String>,
+    #[serde(default)]
+    pub last_delivered: Option<u64>,
+    #[serde(default)]
+    pub last_delivery_status: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -449,6 +475,10 @@ pub struct CronJobPayload {
     pub kind: String,
     #[serde(default)]
     pub message: Option<String>,
+    #[serde(default)]
+    pub timeout_seconds: Option<u64>,
+    #[serde(default)]
+    pub thinking: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -461,6 +491,8 @@ pub struct CronJobDelivery {
     pub channel: Option<String>,
     #[serde(default)]
     pub to: Option<String>,
+    #[serde(default)]
+    pub best_effort: Option<bool>,
 }
 
 /// API response type for a cron job (served to frontend)
