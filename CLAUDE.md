@@ -80,9 +80,9 @@ cargo clippy
 
 3. **Single binary.** React frontend is compiled into the Rust binary via rust-embed. End users run one file.
 
-4. **Cost tracking from JSONL.** Session files contain `usage.cost.total`, `input_tokens`, `output_tokens` fields. Parser aggregates by model, agent, and date.
+4. **Cost tracking from sessions.json.** OpenClaw writes per-agent cost/token summaries to `~/.openclaw/agents/<id>/sessions.json` (not individual JSONL files). The current `usage.rs` parser targets JSONL fields (`usage.cost.total`, `input_tokens`, `output_tokens`) which do not match the actual format — this is the root cause of $0.00 cost on real installs.
 
-5. **Cron detection.** Reads `crons` array from `openclaw.json`, matches to session files with `:cron:` in their name, calculates overdue status.
+5. **Cron detection from cron/jobs.json.** Cron job definitions are stored at `~/.openclaw/cron/jobs.json`, not in a `crons` array inside `openclaw.json`. The current `cron.rs` reads the wrong file — this is the root cause of cron jobs never being detected on real installs.
 
 ## Code Style
 
@@ -99,8 +99,8 @@ cargo clippy
 ## Known Issues (v0.2.0)
 
 - Daily cost trend shows "No daily data yet" due to UTC timezone alignment
-- Cost $0.00 on real OpenClaw if JSONL format differs from expected fields
-- Cron jobs not detected if config uses different structure than `crons` array
+- **Cost always $0.00 on real OpenClaw** — root cause: `usage.rs` parses JSONL files looking for `usage.cost.total` / `input_tokens` / `output_tokens`, but actual cost data lives in `~/.openclaw/agents/<id>/sessions.json`. Needs full rewrite to read `sessions.json`.
+- **Cron jobs never detected on real OpenClaw** — root cause: `cron.rs` reads a `crons` array from `openclaw.json`, but cron definitions are actually stored at `~/.openclaw/cron/jobs.json`. Needs to read the correct file.
 - Agent detail page can hang on agents with many sessions (needs pagination)
 - Folders in workspace browser are not clickable (not recursive yet)
 - Session list has no pagination or filtering

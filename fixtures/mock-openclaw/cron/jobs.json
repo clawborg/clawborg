@@ -1,0 +1,39 @@
+{
+  "jobs": [
+    {
+      "schedule": "*/30 * * * *",
+      "agent": "main",
+      "task": "Heartbeat check",
+      "enabled": true,
+      "deleteAfterRun": false
+    },
+    {
+      "schedule": "0 8 * * *",
+      "agent": "coder",
+      "task": "Check for new PRs and run automated code review",
+      "enabled": true,
+      "deleteAfterRun": true
+    },
+    {
+      "schedule": "0 7 * * *",
+      "agent": "writer",
+      "task": "Check content calendar and prepare scheduled posts",
+      "enabled": true,
+      "deleteAfterRun": false
+    },
+    {
+      "schedule": "0 6 * * *",
+      "agent": "main",
+      "task": "Daily memory extraction and consolidation",
+      "enabled": true,
+      "deleteAfterRun": true
+    },
+    {
+      "schedule": "0 22 * * 5",
+      "agent": "writer",
+      "task": "Generate weekly content performance report",
+      "enabled": false,
+      "deleteAfterRun": true
+    }
+  ]
+}

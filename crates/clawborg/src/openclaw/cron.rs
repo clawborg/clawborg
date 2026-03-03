@@ -1,15 +1,17 @@
 use crate::types::*;
 use std::path::Path;
 
-/// Build cron entries from config with status info
-pub fn build_cron_list(config: &OpenClawConfig, agents: &[ResolvedAgent]) -> Vec<CronEntry> {
-    let crons = match &config.crons {
-        Some(c) => c,
-        None => return Vec::new(),
-    };
+/// Build cron entries by reading ~/.openclaw/cron/jobs.json with status info
+pub fn build_cron_list(openclaw_dir: &Path, agents: &[ResolvedAgent]) -> Vec<CronEntry> {
+    let jobs_path = openclaw_dir.join("cron").join("jobs.json");
 
-    crons
-        .iter()
+    let jobs: Vec<CronConfigEntry> = std::fs::read_to_string(&jobs_path)
+        .ok()
+        .and_then(|s| serde_json::from_str::<CronJobsFile>(&s).ok())
+        .map(|f| f.jobs)
+        .unwrap_or_default();
+
+    jobs.iter()
         .map(|raw| {
             let agent_id = raw.agent.as_deref().unwrap_or("main");
             let task = raw.task.as_deref().unwrap_or("(unnamed task)");
