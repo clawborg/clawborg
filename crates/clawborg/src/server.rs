@@ -30,11 +30,13 @@ pub struct ServerConfig {
 
 pub async fn run(config: ServerConfig) -> anyhow::Result<()> {
     let (file_events_tx, _) = broadcast::channel::<crate::types::FileChangeEvent>(256);
+    let clawborg_config = crate::clawborg_config::load();
 
     let state = AppState {
         openclaw_dir: config.openclaw_dir.clone(),
         readonly: config.readonly,
         file_events_tx: file_events_tx.clone(),
+        clawborg_config,
     };
 
     // Start file watcher if enabled
