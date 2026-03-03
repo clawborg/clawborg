@@ -1,25 +1,23 @@
-use crate::openclaw::config;
 use crate::types::FileChangeEvent;
 use chrono::Utc;
 use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
-use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use tokio::sync::broadcast;
 
-/// Start watching all resolved workspace and session paths for file changes
+/// Start watching the entire openclaw directory for file changes.
+/// Uses a single recursive watch instead of per-agent path enumeration,
+/// which avoids exhausting OS inotify/kqueue limits on large setups.
 pub async fn start_watching(
     openclaw_dir: PathBuf,
     tx: broadcast::Sender<FileChangeEvent>,
 ) -> anyhow::Result<()> {
-    // Resolve all paths to watch from config
-    let watch_paths = discover_watch_paths(&openclaw_dir);
-
-    if watch_paths.is_empty() {
-        tracing::warn!("No directories to watch");
+    if !openclaw_dir.exists() {
+        tracing::warn!("openclaw_dir does not exist, skipping watcher");
         return Ok(());
     }
 
-    let (notify_tx, mut notify_rx) = tokio::sync::mpsc::channel::<Event>(256);
+    let (notify_tx, mut notify_rx) = tokio::sync::mpsc::channel::<Event>(512);
+    let watch_dir = openclaw_dir.clone();
 
     let _watcher = tokio::task::spawn_blocking(move || -> anyhow::Result<RecommendedWatcher> {
         let mut watcher = RecommendedWatcher::new(
@@ -31,14 +29,8 @@ pub async fn start_watching(
             Config::default(),
         )?;
 
-        for path in &watch_paths {
-            if path.exists() {
-                match watcher.watch(path, RecursiveMode::Recursive) {
-                    Ok(_) => tracing::info!("👁 Watching: {}", path.display()),
-                    Err(e) => tracing::warn!("Failed to watch {}: {e}", path.display()),
-                }
-            }
-        }
+        watcher.watch(&watch_dir, RecursiveMode::Recursive)?;
+        tracing::info!("👁 Watching: {} (recursive)", watch_dir.display());
 
         Ok(watcher)
     })
@@ -69,42 +61,6 @@ pub async fn start_watching(
     }
 
     Ok(())
-}
-
-/// Discover all directories that need watching.
-/// Includes each agent's workspace + state/sessions dir.
-fn discover_watch_paths(openclaw_dir: &Path) -> Vec<PathBuf> {
-    let mut paths = HashSet::new();
-
-    // Always watch the openclaw.json itself
-    paths.insert(openclaw_dir.to_path_buf());
-
-    // Try to resolve agents from config
-    if let Ok(cfg) = config::read_config(openclaw_dir) {
-        let agents = config::resolve_agents(&cfg, openclaw_dir);
-        for agent in &agents {
-            if agent.workspace_path.exists() {
-                paths.insert(agent.workspace_path.clone());
-            }
-            if agent.sessions_dir.exists() {
-                paths.insert(agent.sessions_dir.clone());
-            }
-        }
-    }
-
-    // Also watch common fallback directories if they exist
-    let fallbacks = [
-        openclaw_dir.join("workspaces"),
-        openclaw_dir.join("agents"),
-        openclaw_dir.join("workspace"),
-    ];
-    for dir in fallbacks {
-        if dir.exists() {
-            paths.insert(dir);
-        }
-    }
-
-    paths.into_iter().collect()
 }
 
 /// Extract agent ID and filename from a file change event path.
