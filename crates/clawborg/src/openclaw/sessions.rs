@@ -108,6 +108,8 @@ fn parse_jsonl_session(agent_id: &str, path: &Path) -> Option<SessionSummary> {
     let mut last_timestamp: Option<u64> = None;
     let mut total_input_tokens: u64 = 0;
     let mut total_output_tokens: u64 = 0;
+    let mut total_cache_read: u64 = 0;
+    let mut total_cache_write: u64 = 0;
     let mut last_model: Option<String> = None;
     let mut line_count: u64 = 0;
 
@@ -140,6 +142,13 @@ fn parse_jsonl_session(agent_id: &str, path: &Path) -> Option<SessionSummary> {
                 }
                 if let Some(output) = usage.get("output_tokens").and_then(|v| v.as_u64()) {
                     total_output_tokens += output;
+                }
+                // Anthropic prompt caching fields
+                if let Some(cr) = usage.get("cache_read_input_tokens").and_then(|v| v.as_u64()) {
+                    total_cache_read += cr;
+                }
+                if let Some(cw) = usage.get("cache_creation_input_tokens").and_then(|v| v.as_u64()) {
+                    total_cache_write += cw;
                 }
             }
 
@@ -180,8 +189,11 @@ fn parse_jsonl_session(agent_id: &str, path: &Path) -> Option<SessionSummary> {
         status,
         input_tokens: total_input_tokens,
         output_tokens: total_output_tokens,
+        cache_read: total_cache_read,
+        cache_write: total_cache_write,
         context_tokens: 0,
         model: last_model,
+        model_provider: None,
     })
 }
 
@@ -227,8 +239,11 @@ fn entry_to_summary(agent_id: &str, key: &str, entry: SessionEntry) -> SessionSu
         status,
         input_tokens: entry.input_tokens,
         output_tokens: entry.output_tokens,
+        cache_read: entry.cache_read,
+        cache_write: entry.cache_write,
         context_tokens: entry.context_tokens,
         model: entry.model,
+        model_provider: entry.model_provider,
     }
 }
 

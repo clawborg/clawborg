@@ -87,8 +87,11 @@ export interface SessionSummary {
   status: 'active' | 'idle' | 'stale' | 'archived';
   inputTokens: number;
   outputTokens: number;
+  cacheRead: number;
+  cacheWrite: number;
   contextTokens: number;
   model: string | null;
+  modelProvider: string | null;
 }
 
 export interface HealthReport {

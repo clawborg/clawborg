@@ -327,8 +327,11 @@ pub struct SessionSummary {
     pub status: SessionStatus,
     pub input_tokens: u64,
     pub output_tokens: u64,
+    pub cache_read: u64,
+    pub cache_write: u64,
     pub context_tokens: u64,
     pub model: Option<String>,
+    pub model_provider: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
