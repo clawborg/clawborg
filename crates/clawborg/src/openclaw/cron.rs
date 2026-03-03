@@ -214,10 +214,10 @@ fn is_overdue(schedule: &str, last_run: &str) -> bool {
 
     // Determine expected interval
     let expected_hours = if min.starts_with("*/") {
-        let interval: f64 = min[2..].parse().unwrap_or(60.0);
+        let interval: f64 = min.strip_prefix("*/").and_then(|s| s.parse().ok()).unwrap_or(60.0);
         interval / 60.0
     } else if hour.starts_with("*/") {
-        let interval: f64 = hour[2..].parse().unwrap_or(1.0);
+        let interval: f64 = hour.strip_prefix("*/").and_then(|s| s.parse().ok()).unwrap_or(1.0);
         interval
     } else if dow != "*" {
         // Weekly
@@ -245,7 +245,7 @@ fn estimate_next_run(schedule: &str) -> Option<String> {
 
     if min_part.starts_with("*/") {
         // Every N minutes
-        let interval: i64 = min_part[2..].parse().unwrap_or(30);
+        let interval: i64 = min_part.strip_prefix("*/").and_then(|s| s.parse().ok()).unwrap_or(30);
         let current_min = now.format("%M").to_string().parse::<i64>().unwrap_or(0);
         let next_min = ((current_min / interval) + 1) * interval;
         let delta = next_min - current_min;

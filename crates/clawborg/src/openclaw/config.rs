@@ -73,8 +73,7 @@ pub fn resolve_agents(
                             .as_ref()
                             .or(default_model);
 
-                        let state_dir = agents_state_dir.join(&entry.id);
-                        let sessions_dir = state_dir.join("sessions");
+                        let sessions_dir = agents_state_dir.join(&entry.id).join("sessions");
 
                         let is_default = entry.is_default.unwrap_or(i == 0);
 
@@ -86,7 +85,6 @@ pub fn resolve_agents(
                                 .and_then(|m| m.fallbacks.clone())
                                 .unwrap_or_default(),
                             workspace_path: ws_path,
-                            state_dir,
                             sessions_dir,
                             is_default,
                         }
@@ -152,9 +150,6 @@ fn single_agent(
         .as_ref()
         .and_then(|i| i.name.clone());
 
-    let state_dir = agents_state_dir.join(id);
-    let sessions_dir = state_dir.join("sessions");
-
     ResolvedAgent {
         id: id.to_string(),
         name,
@@ -163,8 +158,7 @@ fn single_agent(
             .and_then(|m| m.fallbacks.clone())
             .unwrap_or_default(),
         workspace_path: workspace_path.to_path_buf(),
-        state_dir,
-        sessions_dir,
+        sessions_dir: agents_state_dir.join(id).join("sessions"),
         is_default: true,
     }
 }
@@ -179,15 +173,13 @@ fn detect_agents_from_filesystem(
 
     // Check if there's a main workspace
     if default_workspace.exists() {
-        let state_dir = agents_state_dir.join("main");
         agents.push(ResolvedAgent {
             id: "main".to_string(),
             name: None,
             model: None,
             fallbacks: vec![],
             workspace_path: default_workspace.to_path_buf(),
-            state_dir: state_dir.clone(),
-            sessions_dir: state_dir.join("sessions"),
+            sessions_dir: agents_state_dir.join("main").join("sessions"),
             is_default: true,
         });
     }
@@ -207,7 +199,6 @@ fn detect_agents_from_filesystem(
                     model: None,
                     fallbacks: vec![],
                     workspace_path: openclaw_dir.join(format!("workspace-{id}")),
-                    state_dir: entry.path(),
                     sessions_dir,
                     is_default: false,
                 });
@@ -224,15 +215,9 @@ fn detect_agents_from_filesystem(
 
 /// Resolve ~ and relative paths
 fn resolve_tilde(path_str: &str, openclaw_dir: &Path) -> PathBuf {
-    if path_str.starts_with("~/") {
+    if let Some(rel) = path_str.strip_prefix("~/") {
         if let Some(home) = dirs::home_dir() {
-            return home.join(&path_str[2..]);
-        }
-    }
-    if path_str.starts_with("~/.openclaw/") {
-        // Already has the prefix, resolve from home
-        if let Some(home) = dirs::home_dir() {
-            return home.join(&path_str[2..]);
+            return home.join(rel);
         }
     }
 

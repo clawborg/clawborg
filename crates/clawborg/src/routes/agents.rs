@@ -20,7 +20,7 @@ pub async fn list_agents(
 
     let agents: Vec<AgentSummary> = resolved
         .iter()
-        .map(|agent| workspace::build_agent_summary(agent))
+        .map(workspace::build_agent_summary)
         .collect();
 
     Ok(Json(agents))
