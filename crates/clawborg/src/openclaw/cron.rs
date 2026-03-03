@@ -6,11 +6,21 @@ use std::path::Path;
 pub fn build_cron_list(openclaw_dir: &Path, _agents: &[ResolvedAgent]) -> Vec<CronEntry> {
     let jobs_path = openclaw_dir.join("cron").join("jobs.json");
 
-    let jobs: Vec<CronJobEntry> = std::fs::read_to_string(&jobs_path)
-        .ok()
-        .and_then(|s| serde_json::from_str::<CronJobsFile>(&s).ok())
-        .map(|f| f.jobs)
-        .unwrap_or_default();
+    let content = match std::fs::read_to_string(&jobs_path) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("[clawborg] Failed to read {}: {e}", jobs_path.display());
+            return vec![];
+        }
+    };
+
+    let jobs: Vec<CronJobEntry> = match serde_json::from_str::<CronJobsFile>(&content) {
+        Ok(f) => f.jobs,
+        Err(e) => {
+            eprintln!("[clawborg] Failed to parse {}: {e}", jobs_path.display());
+            return vec![];
+        }
+    };
 
     jobs.iter().map(job_to_entry).collect()
 }
