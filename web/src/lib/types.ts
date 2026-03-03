@@ -136,11 +136,11 @@ export interface BloatedSession {
 }
 
 export interface CronEntry {
+  id: string;
   schedule: string;
   agent: string;
   task: string;
   enabled: boolean;
-  deleteAfterRun: boolean;
   scheduleDisplay: string;
   lastRun: CronRunInfo | null;
   nextRun: string | null;
@@ -149,9 +149,8 @@ export interface CronEntry {
 
 export interface CronRunInfo {
   timestamp: string;
-  cost: number;
-  tokens: number;
   durationMs: number | null;
+  lastStatus: string | null;
 }
 
 export interface Alert {
