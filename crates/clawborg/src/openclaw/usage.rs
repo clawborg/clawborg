@@ -39,6 +39,7 @@ fn build_summary(
     let mut total_input: u64 = 0;
     let mut total_output: u64 = 0;
     let mut total_cache_read: u64 = 0;
+    let mut total_cache_write: u64 = 0;
 
     let mut model_map: HashMap<String, ModelCost> = HashMap::new();
     let mut agent_costs: Vec<AgentCost> = Vec::new();
@@ -75,6 +76,7 @@ fn build_summary(
             total_input += entry.input_tokens;
             total_output += entry.output_tokens;
             total_cache_read += entry.cache_read;
+            total_cache_write += entry.cache_write;
             agent_input += entry.input_tokens;
             agent_output += entry.output_tokens;
 
@@ -156,6 +158,7 @@ fn build_summary(
         total_input_tokens: total_input,
         total_output_tokens: total_output,
         total_cache_read_tokens: total_cache_read,
+        total_cache_write_tokens: total_cache_write,
         by_model,
         by_agent: agent_costs,
         daily_trend,
@@ -169,7 +172,12 @@ fn calculate_cost(entry: &SessionEntry) -> f64 {
     let model = entry.model.as_deref().unwrap_or("");
     let provider = entry.model_provider.as_deref().unwrap_or("");
     let (input_per_m, output_per_m) = pricing(model, provider);
-    (entry.input_tokens as f64 * input_per_m + entry.output_tokens as f64 * output_per_m)
+    // cache_write (creation) is billed at the standard input rate
+    // cache_read is billed at 10% of input rate
+    (entry.input_tokens as f64 * input_per_m
+        + entry.output_tokens as f64 * output_per_m
+        + entry.cache_write as f64 * input_per_m
+        + entry.cache_read as f64 * (input_per_m * 0.1))
         / 1_000_000.0
 }
 
@@ -188,7 +196,7 @@ fn pricing(model: &str, provider: &str) -> (f64, f64) {
     } else if m.contains("claude-opus") {
         (15.0, 75.0)
     } else if m.contains("claude-haiku") {
-        (0.25, 1.25)
+        (0.80, 4.0)
     } else {
         // Default: claude-sonnet-class pricing
         (3.0, 15.0)
