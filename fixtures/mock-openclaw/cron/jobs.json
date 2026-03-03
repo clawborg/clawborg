@@ -6,7 +6,7 @@
       "agentId": "main",
       "name": "Heartbeat check",
       "enabled": true,
-      "schedule": { "kind": "interval", "everyMs": 1800000 },
+      "schedule": { "kind": "every", "everyMs": 1800000 },
       "sessionTarget": "cron:heartbeat",
       "wakeMode": "scheduled",
       "payload": { "kind": "message", "message": "Heartbeat check" },
