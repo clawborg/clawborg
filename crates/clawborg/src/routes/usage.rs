@@ -17,7 +17,8 @@ pub async fn get_usage(
     })?;
 
     let resolved = config::resolve_agents(&cfg, &state.openclaw_dir);
-    let summary = usage::build_usage_summary(&resolved);
+    let cache = state.cache.read().await;
+    let summary = usage::build_usage_summary_from_cache(&cache.sessions, &resolved);
 
     Ok(Json(summary))
 }

@@ -1,6 +1,8 @@
-use crate::types::FileChangeEvent;
+use crate::cache::AppCache;
+use crate::types::{CronJobsFile, FileChangeEvent, SessionEntry};
 use chrono::Utc;
 use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use tokio::sync::broadcast;
 
@@ -10,6 +12,7 @@ use tokio::sync::broadcast;
 pub async fn start_watching(
     openclaw_dir: PathBuf,
     tx: broadcast::Sender<FileChangeEvent>,
+    cache: AppCache,
 ) -> anyhow::Result<()> {
     if !openclaw_dir.exists() {
         tracing::warn!("openclaw_dir does not exist, skipping watcher");
@@ -48,6 +51,18 @@ pub async fn start_watching(
         for path in &event.paths {
             let (agent_id, file_name) = extract_agent_info(path);
 
+            // Cache invalidation based on what changed
+            let fname = file_name.as_deref().unwrap_or("");
+            let path_str = path.to_string_lossy();
+
+            if fname == "sessions.json" && path_str.contains("/sessions/") {
+                if let Some(ref aid) = agent_id {
+                    reload_agent_sessions(path, aid, &cache).await;
+                }
+            } else if fname == "jobs.json" && path_str.contains("/cron/") {
+                reload_cron_jobs(path, &cache).await;
+            }
+
             let change_event = FileChangeEvent {
                 event_type: event_type.to_string(),
                 path: path.to_string_lossy().to_string(),
@@ -61,6 +76,54 @@ pub async fn start_watching(
     }
 
     Ok(())
+}
+
+/// Reload sessions for a single agent into the cache.
+async fn reload_agent_sessions(path: &Path, agent_id: &str, cache: &AppCache) {
+    match std::fs::read_to_string(path) {
+        Ok(content) => match serde_json::from_str::<HashMap<String, SessionEntry>>(&content) {
+            Ok(map) => {
+                let mut c = cache.write().await;
+                c.sessions.insert(agent_id.to_string(), map);
+                tracing::debug!("💾 Cache refreshed: sessions for agent {agent_id}");
+            }
+            Err(e) => {
+                eprintln!("[clawborg] Failed to parse sessions.json for agent {agent_id}: {e}");
+            }
+        },
+        Err(e) => {
+            // File removed — clear from cache
+            if e.kind() == std::io::ErrorKind::NotFound {
+                let mut c = cache.write().await;
+                c.sessions.remove(agent_id);
+                tracing::debug!("💾 Cache cleared: sessions for agent {agent_id}");
+            }
+        }
+    }
+}
+
+/// Reload cron jobs from disk into the cache.
+async fn reload_cron_jobs(path: &Path, cache: &AppCache) {
+    match std::fs::read_to_string(path) {
+        Ok(content) => match serde_json::from_str::<CronJobsFile>(&content) {
+            Ok(file) => {
+                let count = file.jobs.len();
+                let mut c = cache.write().await;
+                c.cron_jobs = file.jobs;
+                tracing::debug!("💾 Cache refreshed: {count} cron jobs");
+            }
+            Err(e) => {
+                eprintln!("[clawborg] Failed to parse cron/jobs.json: {e}");
+            }
+        },
+        Err(e) => {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                let mut c = cache.write().await;
+                c.cron_jobs.clear();
+                tracing::debug!("💾 Cache cleared: cron jobs");
+            }
+        }
+    }
 }
 
 /// Extract agent ID and filename from a file change event path.

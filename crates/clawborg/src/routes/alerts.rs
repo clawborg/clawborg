@@ -17,8 +17,15 @@ pub async fn get_alerts(
     })?;
 
     let resolved = config::resolve_agents(&cfg, &state.openclaw_dir);
-    let usage_summary = usage::build_usage_summary(&resolved);
-    let cron_list = cron::build_cron_list(&state.openclaw_dir, &resolved);
+
+    // Read from cache for fast access
+    let (usage_summary, cron_list) = {
+        let cache = state.cache.read().await;
+        let usage_summary = usage::build_usage_summary_from_cache(&cache.sessions, &resolved);
+        let cron_list = cron::build_cron_list_from_jobs(&cache.cron_jobs);
+        (usage_summary, cron_list)
+    };
+
     let health_report = health::build_health_report(&state.openclaw_dir).unwrap_or(HealthReport {
         total_agents: 0,
         healthy_agents: 0,

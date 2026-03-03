@@ -2,11 +2,34 @@ use crate::types::*;
 use chrono::NaiveDate;
 use std::collections::HashMap;
 
+/// Build a complete usage summary from cached session data (no disk I/O).
+pub fn build_usage_summary_from_cache(
+    sessions_cache: &HashMap<String, HashMap<String, SessionEntry>>,
+    agents: &[ResolvedAgent],
+) -> UsageSummary {
+    build_summary(agents, |agent| sessions_cache.get(&agent.id).cloned())
+}
+
 /// Build a complete usage summary across all agents.
 /// Reads ~/.openclaw/agents/<id>/sessions/sessions.json (flat map format).
 /// Cost is calculated from token counts using a built-in pricing table
 /// because OpenClaw does not store cost in sessions.json.
+#[allow(dead_code)]
 pub fn build_usage_summary(agents: &[ResolvedAgent]) -> UsageSummary {
+    build_summary(agents, |agent| {
+        let sessions_json = agent.sessions_dir.join("sessions.json");
+        std::fs::read_to_string(&sessions_json)
+            .ok()
+            .and_then(|s| serde_json::from_str(&s).ok())
+    })
+}
+
+/// Core aggregation logic — shared by both the cache-based and disk-based variants.
+/// `get_sessions` is called once per agent to obtain its session map.
+fn build_summary(
+    agents: &[ResolvedAgent],
+    get_sessions: impl Fn(&ResolvedAgent) -> Option<HashMap<String, SessionEntry>>,
+) -> UsageSummary {
     let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
     let today_date = NaiveDate::parse_from_str(&today, "%Y-%m-%d").ok();
 
@@ -25,27 +48,20 @@ pub fn build_usage_summary(agents: &[ResolvedAgent]) -> UsageSummary {
     let week_ago = now - chrono::Duration::days(7);
 
     for agent in agents {
-        let sessions_json = agent.sessions_dir.join("sessions.json");
-
-        // sessions.json is a flat map: { "session-key": { ...SessionEntry } }
-        let session_map: HashMap<String, SessionEntry> =
-            match std::fs::read_to_string(&sessions_json)
-                .ok()
-                .and_then(|s| serde_json::from_str(&s).ok())
-            {
-                Some(m) => m,
-                None => {
-                    agent_costs.push(AgentCost {
-                        agent_id: agent.id.clone(),
-                        agent_name: agent.name.clone(),
-                        cost: 0.0,
-                        input_tokens: 0,
-                        output_tokens: 0,
-                        session_count: 0,
-                    });
-                    continue;
-                }
-            };
+        let session_map = match get_sessions(agent) {
+            Some(m) => m,
+            None => {
+                agent_costs.push(AgentCost {
+                    agent_id: agent.id.clone(),
+                    agent_name: agent.name.clone(),
+                    cost: 0.0,
+                    input_tokens: 0,
+                    output_tokens: 0,
+                    session_count: 0,
+                });
+                continue;
+            }
+        };
 
         let mut agent_cost: f64 = 0.0;
         let mut agent_input: u64 = 0;
@@ -88,10 +104,8 @@ pub fn build_usage_summary(agents: &[ResolvedAgent]) -> UsageSummary {
             }
 
             // Per-model breakdown — key on "provider/model" for display clarity
-            let model_key = model_display_key(
-                entry.model.as_deref(),
-                entry.model_provider.as_deref(),
-            );
+            let model_key =
+                model_display_key(entry.model.as_deref(), entry.model_provider.as_deref());
             let mc = model_map.entry(model_key.clone()).or_insert(ModelCost {
                 model: model_key,
                 cost: 0.0,

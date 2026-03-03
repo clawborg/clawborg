@@ -12,6 +12,8 @@ pub struct AppState {
     pub readonly: bool,
     pub file_events_tx: broadcast::Sender<FileChangeEvent>,
     pub clawborg_config: crate::clawborg_config::ClawBorgConfig,
+    /// In-memory cache for sessions and cron jobs
+    pub cache: crate::cache::AppCache,
 }
 
 // ─── OpenClaw Config Types ───

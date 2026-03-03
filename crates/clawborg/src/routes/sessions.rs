@@ -17,7 +17,8 @@ pub async fn list_sessions(
     })?;
 
     let resolved = config::resolve_agents(&cfg, &state.openclaw_dir);
-    let all_sessions = sessions::read_all_sessions(&resolved);
+    let cache = state.cache.read().await;
+    let all_sessions = sessions::read_sessions_from_cache(&cache.sessions, &resolved);
 
     Ok(Json(all_sessions))
 }
