@@ -41,7 +41,10 @@ export default function AgentDetail() {
   const [viewMode, setViewMode] = useState<"preview" | "code">("preview");
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [fileLoading, setFileLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Parsed markdown HTML — kept in state so we can await marked.parse() properly
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null);
 
   // Sort files: priority files first, then alphabetical
   const sortedFiles = useMemo(() => {
@@ -74,11 +77,14 @@ export default function AgentDetail() {
       .finally(() => setLoading(false));
   }, [id]);
 
-  // Load file content
+  // Load file content — clear previous content immediately to avoid stale preview
   useEffect(() => {
     if (!id || !activeFile) return;
     setEditing(false);
     setViewMode("preview");
+    setFileContent("");
+    setPreviewHtml(null);
+    setFileLoading(true);
     fetchFile(id, activeFile)
       .then((data) => {
         setFileContent(data.content);
@@ -87,13 +93,19 @@ export default function AgentDetail() {
       .catch(() => {
         setFileContent("(file not found)");
         setEditContent("");
-      });
+      })
+      .finally(() => setFileLoading(false));
   }, [id, activeFile]);
 
-  // Parsed markdown HTML (only computed when in preview mode for a .md file)
-  const previewHtml = useMemo(() => {
-    if (!fileContent || !activeFile?.endsWith(".md")) return null;
-    return marked.parse(fileContent) as string;
+  // Parse markdown whenever file content changes.
+  // Uses Promise.resolve() to safely handle marked.parse() returning
+  // either a string or a Promise<string> depending on marked version/config.
+  useEffect(() => {
+    if (!fileContent || !activeFile?.endsWith(".md")) {
+      setPreviewHtml(null);
+      return;
+    }
+    Promise.resolve(marked.parse(fileContent)).then(setPreviewHtml);
   }, [fileContent, activeFile]);
 
   const handleSave = async () => {
@@ -235,9 +247,9 @@ export default function AgentDetail() {
             })}
           </div>
 
-          {/* File viewer / editor */}
-          <div className="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-2 border-b border-gray-800 bg-gray-900/50">
+          {/* File viewer / editor — flex column so content fills remaining height */}
+          <div className="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden flex flex-col min-h-[calc(100vh-20rem)]">
+            <div className="flex items-center justify-between px-4 py-2 border-b border-gray-800 bg-gray-900/50 shrink-0">
               <span className="text-xs text-gray-500 font-mono">
                 {activeFile}
                 {fileInfo && !fileInfo.isEmpty && (
@@ -305,20 +317,24 @@ export default function AgentDetail() {
               </div>
             </div>
 
-            {editing ? (
+            {fileLoading ? (
+              <div className="flex-1 flex items-center justify-center text-gray-600 text-sm">
+                Loading…
+              </div>
+            ) : editing ? (
               <textarea
                 value={editContent}
                 onChange={(e) => setEditContent(e.target.value)}
-                className="w-full h-96 p-4 bg-gray-950 text-gray-200 font-mono text-sm resize-none focus:outline-none"
+                className="flex-1 w-full p-4 bg-gray-950 text-gray-200 font-mono text-sm resize-none focus:outline-none"
                 spellCheck={false}
               />
             ) : viewMode === "preview" && previewHtml ? (
               <div
-                className="md-prose p-5 overflow-auto max-h-[32rem] text-sm"
+                className="md-prose flex-1 p-5 overflow-auto text-sm"
                 dangerouslySetInnerHTML={{ __html: previewHtml }}
               />
             ) : (
-              <pre className="p-4 text-sm text-gray-300 font-mono whitespace-pre-wrap overflow-auto max-h-[32rem]">
+              <pre className="flex-1 p-4 text-sm text-gray-300 font-mono whitespace-pre-wrap overflow-auto">
                 {fileContent}
               </pre>
             )}
