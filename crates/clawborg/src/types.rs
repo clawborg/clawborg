@@ -433,13 +433,15 @@ pub struct CronJobEntry {
 pub enum CronSchedule {
     /// e.g. { "kind": "every", "everyMs": 1800000, "anchorMs": 0 }
     Every {
-        every_ms: u64,
+        #[serde(default)]
+        every_ms: Option<u64>,
         #[serde(default)]
         anchor_ms: Option<u64>,
     },
     /// e.g. { "kind": "cron", "expr": "0 8 * * *", "tz": "UTC" }
     Cron {
-        expr: String,
+        #[serde(default)]
+        expr: Option<String>,
         #[serde(default)]
         tz: Option<String>,
     },
