@@ -5,6 +5,26 @@ All notable changes to ClawBorg will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-03-03
+
+### Added
+- Debug logging for serde parse errors in cron.rs — failures now print to stderr with file path and error detail instead of silently returning an empty list
+- Configurable alert thresholds via `~/.clawborg/config.toml` (`[alerts]` section with `dailySpendThreshold` and `dailySpendWarning` fields)
+
+### Fixed
+- `sessions.json` parsing aligned with real OpenClaw format: flat `HashMap` keyed by session key, camelCase fields (`sessionId`, `updatedAt`, `inputTokens`, etc.), no cost field — cost is now calculated from tokens using a per-model pricing table
+- `cron/jobs.json` parsing with polymorphic schedule object: `kind: "every"` (interval) and `kind: "cron"` (cron expression) variants now correctly deserialised via serde internally-tagged enum
+- `CronSchedule` fields made optional (`every_ms`, `anchor_ms`, `expr`, `tz`) to handle real-world jobs that omit these fields without failing deserialization
+- `lastDelivered` in `CronJobState` changed to `Option<serde_json::Value>` to accept both boolean (`true`) and timestamp (`u64`) values present in real data
+- `is_overdue` no longer returns `true` for every job when `every_ms` is `None` — interval-unknown jobs are treated as `ok`, not overdue
+- Frontend null guard on cron page: `lastRun` and `nextRun` are properly handled when `null`; shows "Never" instead of crashing on `.toString()`
+- `CronRunInfo` TypeScript type aligned with actual API response (`durationMs` + `lastStatus` instead of non-existent `cost`/`tokens`)
+- Sidebar is now `position: fixed` at all viewport sizes — no longer scrolls away with long page content (e.g. the Crons list)
+- WebSocket ping/pong heartbeat: server sends a ping every 30 s to keep connections alive through proxies and load balancers; disconnected clients are now cleaned up immediately via `AbortHandle`
+- Daily spend threshold moved from `openclaw.json` to `~/.clawborg/config.toml` — ClawBorg no longer writes non-standard fields into OpenClaw's config file
+- Alert threshold logging reduced to once at startup ("Loaded config" or "No config found, using defaults") instead of per-request
+- File watcher consolidated from per-agent path enumeration (30+ OS watches) to a single recursive watch on `openclaw_dir`, preventing inotify/kqueue limit exhaustion on large agent setups
+
 ## [0.2.0] - 2026-03-02
 
 ### Added
