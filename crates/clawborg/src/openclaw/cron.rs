@@ -80,21 +80,23 @@ fn state_to_run_info(state: &CronJobState) -> Option<CronRunInfo> {
 /// Canonical string representation of a schedule (used in CronEntry.schedule field).
 fn schedule_to_string(schedule: &CronSchedule) -> String {
     match schedule {
-        CronSchedule::Every { every_ms, .. } => {
-            format!("every:{}", every_ms.unwrap_or(0))
-        }
-        CronSchedule::Cron { expr, .. } => {
-            expr.clone().unwrap_or_default()
-        }
+        CronSchedule::Every { every_ms, .. } => match every_ms {
+            Some(ms) => format!("every:{ms}"),
+            None => "every:unknown".to_string(),
+        },
+        CronSchedule::Cron { expr, .. } => expr.clone().unwrap_or_else(|| "N/A".to_string()),
     }
 }
 
 /// Human-readable schedule description for the UI.
 fn describe_schedule(schedule: &CronSchedule) -> String {
     match schedule {
-        CronSchedule::Every { every_ms, .. } => describe_interval(every_ms.unwrap_or(0)),
+        CronSchedule::Every { every_ms, .. } => match every_ms {
+            Some(ms) => describe_interval(*ms),
+            None => "N/A".to_string(),
+        },
         CronSchedule::Cron { expr, .. } => {
-            expr.as_deref().map(describe_cron_expr).unwrap_or_default()
+            expr.as_deref().map(describe_cron_expr).unwrap_or_else(|| "N/A".to_string())
         }
     }
 }
@@ -163,22 +165,25 @@ fn describe_cron_expr(expr: &str) -> String {
 }
 
 /// Check if a job is overdue based on schedule and last-run state.
+/// Returns false when the schedule interval is unknown (every_ms/expr missing).
 fn is_overdue(schedule: &CronSchedule, state: &CronJobState) -> bool {
     let Some(last_run_ms) = state.last_run_at_ms else {
         return false;
     };
+    let Some(expected_ms) = schedule_interval_ms(schedule) else {
+        return false;
+    };
     let now_ms = chrono::Utc::now().timestamp_millis() as u64;
     let elapsed_ms = now_ms.saturating_sub(last_run_ms);
-    let expected_ms = schedule_interval_ms(schedule);
     elapsed_ms > expected_ms * 2
 }
 
-/// Expected interval in milliseconds for overdue / next-run calculations.
-fn schedule_interval_ms(schedule: &CronSchedule) -> u64 {
+/// Expected interval in milliseconds. Returns None when the interval cannot be determined.
+fn schedule_interval_ms(schedule: &CronSchedule) -> Option<u64> {
     match schedule {
-        CronSchedule::Every { every_ms, .. } => every_ms.unwrap_or(0),
+        CronSchedule::Every { every_ms, .. } => *every_ms,
         CronSchedule::Cron { expr, .. } => {
-            expr.as_deref().map(cron_expr_interval_ms).unwrap_or(24 * 3600 * 1000)
+            expr.as_deref().map(cron_expr_interval_ms)
         }
     }
 }
@@ -210,7 +215,7 @@ fn cron_expr_interval_ms(expr: &str) -> u64 {
 fn estimate_next_run(schedule: &CronSchedule, state: Option<&CronJobState>) -> Option<String> {
     match schedule {
         CronSchedule::Every { every_ms, .. } => {
-            let interval = every_ms.unwrap_or(0);
+            let interval = (*every_ms)?;
             let last_ms = state
                 .and_then(|s| s.last_run_at_ms)
                 .unwrap_or_else(|| chrono::Utc::now().timestamp_millis() as u64);
@@ -218,9 +223,7 @@ fn estimate_next_run(schedule: &CronSchedule, state: Option<&CronJobState>) -> O
             let secs = (next_ms / 1000) as i64;
             chrono::DateTime::from_timestamp(secs, 0).map(|dt| dt.to_rfc3339())
         }
-        CronSchedule::Cron { expr, .. } => {
-            expr.as_deref().and_then(estimate_next_cron)
-        }
+        CronSchedule::Cron { expr, .. } => expr.as_deref().and_then(estimate_next_cron),
     }
 }
 
