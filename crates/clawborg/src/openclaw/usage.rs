@@ -2,7 +2,10 @@ use crate::types::*;
 use chrono::NaiveDate;
 use std::collections::HashMap;
 
-/// Build a complete usage summary across all agents by reading sessions.json
+/// Build a complete usage summary across all agents.
+/// Reads ~/.openclaw/agents/<id>/sessions/sessions.json (flat map format).
+/// Cost is calculated from token counts using a built-in pricing table
+/// because OpenClaw does not store cost in sessions.json.
 pub fn build_usage_summary(agents: &[ResolvedAgent]) -> UsageSummary {
     let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
     let today_date = NaiveDate::parse_from_str(&today, "%Y-%m-%d").ok();
@@ -17,7 +20,6 @@ pub fn build_usage_summary(agents: &[ResolvedAgent]) -> UsageSummary {
     let mut model_map: HashMap<String, ModelCost> = HashMap::new();
     let mut agent_costs: Vec<AgentCost> = Vec::new();
     let mut daily_map: HashMap<String, DailyCost> = HashMap::new();
-    let mut bloated: Vec<BloatedSession> = Vec::new();
 
     let now = chrono::Utc::now();
     let week_ago = now - chrono::Duration::days(7);
@@ -25,95 +27,84 @@ pub fn build_usage_summary(agents: &[ResolvedAgent]) -> UsageSummary {
     for agent in agents {
         let sessions_json = agent.sessions_dir.join("sessions.json");
 
-        let store = match std::fs::read_to_string(&sessions_json)
-            .ok()
-            .and_then(|s| serde_json::from_str::<SessionStore>(&s).ok())
-        {
-            Some(s) => s,
-            None => {
-                agent_costs.push(AgentCost {
-                    agent_id: agent.id.clone(),
-                    agent_name: agent.name.clone(),
-                    cost: 0.0,
-                    input_tokens: 0,
-                    output_tokens: 0,
-                    session_count: 0,
-                });
-                continue;
-            }
-        };
+        // sessions.json is a flat map: { "session-key": { ...SessionEntry } }
+        let session_map: HashMap<String, SessionEntry> =
+            match std::fs::read_to_string(&sessions_json)
+                .ok()
+                .and_then(|s| serde_json::from_str(&s).ok())
+            {
+                Some(m) => m,
+                None => {
+                    agent_costs.push(AgentCost {
+                        agent_id: agent.id.clone(),
+                        agent_name: agent.name.clone(),
+                        cost: 0.0,
+                        input_tokens: 0,
+                        output_tokens: 0,
+                        session_count: 0,
+                    });
+                    continue;
+                }
+            };
 
         let mut agent_cost: f64 = 0.0;
         let mut agent_input: u64 = 0;
         let mut agent_output: u64 = 0;
 
-        for entry in &store.sessions {
-            total_cost += entry.cost;
-            agent_cost += entry.cost;
+        for (_key, entry) in &session_map {
+            let cost = calculate_cost(entry);
+
+            total_cost += cost;
+            agent_cost += cost;
             total_input += entry.input_tokens;
             total_output += entry.output_tokens;
-            total_cache_read += entry.cache_read_tokens;
+            total_cache_read += entry.cache_read;
             agent_input += entry.input_tokens;
             agent_output += entry.output_tokens;
 
-            // Parse last_active for date-based bucketing
-            let last_active_dt = entry
-                .last_active
-                .as_deref()
-                .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
-                .map(|dt| dt.with_timezone(&chrono::Utc));
+            // updatedAt is ms since epoch → convert to DateTime for bucketing
+            if let Some(updated_ms) = entry.updated_at {
+                let secs = (updated_ms / 1000) as i64;
+                if let Some(dt) = chrono::DateTime::from_timestamp(secs, 0) {
+                    let date_str = dt.format("%Y-%m-%d").to_string();
 
-            if let Some(dt) = last_active_dt {
-                let date_str = dt.format("%Y-%m-%d").to_string();
+                    if date_str == today {
+                        today_cost += cost;
+                    }
+                    if dt >= week_ago {
+                        week_cost += cost;
+                    }
 
-                // Today's cost
-                if date_str == today {
-                    today_cost += entry.cost;
+                    let daily = daily_map.entry(date_str.clone()).or_insert(DailyCost {
+                        date: date_str,
+                        cost: 0.0,
+                        input_tokens: 0,
+                        output_tokens: 0,
+                    });
+                    daily.cost += cost;
+                    daily.input_tokens += entry.input_tokens;
+                    daily.output_tokens += entry.output_tokens;
                 }
-
-                // Week cost
-                if dt >= week_ago {
-                    week_cost += entry.cost;
-                }
-
-                // Daily trend
-                let daily = daily_map.entry(date_str.clone()).or_insert(DailyCost {
-                    date: date_str,
-                    cost: 0.0,
-                    input_tokens: 0,
-                    output_tokens: 0,
-                });
-                daily.cost += entry.cost;
-                daily.input_tokens += entry.input_tokens;
-                daily.output_tokens += entry.output_tokens;
             }
 
-            // Per-model breakdown
-            if let Some(ref model) = entry.model {
-                let mc = model_map.entry(model.clone()).or_insert(ModelCost {
-                    model: model.clone(),
-                    cost: 0.0,
-                    input_tokens: 0,
-                    output_tokens: 0,
-                    cache_read_tokens: 0,
-                    turn_count: 0,
-                });
-                mc.cost += entry.cost;
-                mc.input_tokens += entry.input_tokens;
-                mc.output_tokens += entry.output_tokens;
-                mc.cache_read_tokens += entry.cache_read_tokens;
-                mc.turn_count += entry.turn_count;
-            }
-
-            // Bloated sessions (>500 KB)
-            if entry.size_bytes > 500_000 {
-                bloated.push(BloatedSession {
-                    agent_id: agent.id.clone(),
-                    session_key: entry.key.clone(),
-                    size_bytes: entry.size_bytes,
-                    size_display: format_bytes(entry.size_bytes),
-                });
-            }
+            // Per-model breakdown — key on "provider/model" for display clarity
+            let model_key = model_display_key(
+                entry.model.as_deref(),
+                entry.model_provider.as_deref(),
+            );
+            let mc = model_map.entry(model_key.clone()).or_insert(ModelCost {
+                model: model_key,
+                cost: 0.0,
+                input_tokens: 0,
+                output_tokens: 0,
+                cache_read_tokens: 0,
+                turn_count: 0,
+            });
+            mc.cost += cost;
+            mc.input_tokens += entry.input_tokens;
+            mc.output_tokens += entry.output_tokens;
+            mc.cache_read_tokens += entry.cache_read;
+            mc.turn_count += 1; // one session = one logical "turn" at this granularity
         }
 
         agent_costs.push(AgentCost {
@@ -122,7 +113,7 @@ pub fn build_usage_summary(agents: &[ResolvedAgent]) -> UsageSummary {
             cost: agent_cost,
             input_tokens: agent_input,
             output_tokens: agent_output,
-            session_count: store.sessions.len(),
+            session_count: session_map.len(),
         });
     }
 
@@ -144,9 +135,6 @@ pub fn build_usage_summary(agents: &[ResolvedAgent]) -> UsageSummary {
         daily_trend.retain(|d| d.date >= cutoff);
     }
 
-    // Sort bloated by size descending
-    bloated.sort_by(|a, b| b.size_bytes.cmp(&a.size_bytes));
-
     UsageSummary {
         total_cost,
         today_cost,
@@ -157,16 +145,48 @@ pub fn build_usage_summary(agents: &[ResolvedAgent]) -> UsageSummary {
         by_model,
         by_agent: agent_costs,
         daily_trend,
-        bloated_sessions: bloated,
+        bloated_sessions: Vec::new(), // sessions.json has no size info; detect elsewhere
     }
 }
 
-fn format_bytes(bytes: u64) -> String {
-    if bytes >= 1_048_576 {
-        format!("{:.1} MB", bytes as f64 / 1_048_576.0)
-    } else if bytes >= 1024 {
-        format!("{:.0} KB", bytes as f64 / 1024.0)
+/// Calculate USD cost from token counts using a built-in pricing table.
+/// OpenClaw does not store cost in sessions.json — we derive it here.
+fn calculate_cost(entry: &SessionEntry) -> f64 {
+    let model = entry.model.as_deref().unwrap_or("");
+    let provider = entry.model_provider.as_deref().unwrap_or("");
+    let (input_per_m, output_per_m) = pricing(model, provider);
+    (entry.input_tokens as f64 * input_per_m + entry.output_tokens as f64 * output_per_m)
+        / 1_000_000.0
+}
+
+/// Per-million-token prices (input, output) in USD.
+/// Matched on model name substring (case-insensitive) then provider.
+fn pricing(model: &str, provider: &str) -> (f64, f64) {
+    let m = model.to_ascii_lowercase();
+    let p = provider.to_ascii_lowercase();
+
+    if m.contains("gpt-5.3-codex") {
+        (2.50, 10.0)
+    } else if m.contains("deepseek-chat") || (p.contains("deepseek") && m.contains("chat")) {
+        (0.14, 0.28)
+    } else if m.contains("deepseek") {
+        (0.14, 0.28)
+    } else if m.contains("claude-opus") {
+        (15.0, 75.0)
+    } else if m.contains("claude-haiku") {
+        (0.25, 1.25)
     } else {
-        format!("{bytes} B")
+        // Default: claude-sonnet-class pricing
+        (3.0, 15.0)
+    }
+}
+
+/// Build a display key combining provider and model for the model breakdown table.
+fn model_display_key(model: Option<&str>, provider: Option<&str>) -> String {
+    match (provider, model) {
+        (Some(p), Some(m)) => format!("{p}/{m}"),
+        (None, Some(m)) => m.to_string(),
+        (Some(p), None) => p.to_string(),
+        (None, None) => "unknown".to_string(),
     }
 }

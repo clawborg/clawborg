@@ -1,39 +1,85 @@
 {
+  "version": 1,
   "jobs": [
     {
-      "schedule": "*/30 * * * *",
-      "agent": "main",
-      "task": "Heartbeat check",
+      "id": "job_heartbeat_01",
+      "agentId": "main",
+      "name": "Heartbeat check",
       "enabled": true,
-      "deleteAfterRun": false
+      "schedule": { "kind": "interval", "everyMs": 1800000 },
+      "sessionTarget": "cron:heartbeat",
+      "wakeMode": "scheduled",
+      "payload": { "kind": "message", "message": "Heartbeat check" },
+      "delivery": { "mode": "none" },
+      "state": {
+        "lastRunAtMs": 1740893405000,
+        "lastStatus": "ok",
+        "lastDurationMs": 5000,
+        "consecutiveErrors": 0
+      }
     },
     {
-      "schedule": "0 8 * * *",
-      "agent": "coder",
-      "task": "Check for new PRs and run automated code review",
+      "id": "job_codereview_01",
+      "agentId": "coder",
+      "name": "Check for new PRs and run automated code review",
       "enabled": true,
-      "deleteAfterRun": true
+      "schedule": { "kind": "cron", "expr": "0 8 * * *" },
+      "sessionTarget": "cron:codereview",
+      "wakeMode": "scheduled",
+      "payload": { "kind": "message", "message": "Check for new PRs and run automated code review" },
+      "delivery": { "mode": "none" },
+      "state": {
+        "lastRunAtMs": 1740898808000,
+        "lastStatus": "ok",
+        "lastDurationMs": 90000,
+        "consecutiveErrors": 0
+      }
     },
     {
-      "schedule": "0 7 * * *",
-      "agent": "writer",
-      "task": "Check content calendar and prepare scheduled posts",
+      "id": "job_content_01",
+      "agentId": "writer",
+      "name": "Check content calendar and prepare scheduled posts",
       "enabled": true,
-      "deleteAfterRun": false
+      "schedule": { "kind": "cron", "expr": "0 7 * * *" },
+      "sessionTarget": "cron:contentschedule",
+      "wakeMode": "scheduled",
+      "payload": { "kind": "message", "message": "Check content calendar and prepare scheduled posts" },
+      "delivery": { "mode": "none" },
+      "state": {
+        "lastRunAtMs": 1740895208000,
+        "lastStatus": "ok",
+        "lastDurationMs": 12000,
+        "consecutiveErrors": 0
+      }
     },
     {
-      "schedule": "0 6 * * *",
-      "agent": "main",
-      "task": "Daily memory extraction and consolidation",
+      "id": "job_memory_01",
+      "agentId": "main",
+      "name": "Daily memory extraction and consolidation",
       "enabled": true,
-      "deleteAfterRun": true
+      "schedule": { "kind": "cron", "expr": "0 6 * * *" },
+      "sessionTarget": "cron:memory",
+      "wakeMode": "scheduled",
+      "payload": { "kind": "message", "message": "Daily memory extraction and consolidation" },
+      "delivery": { "mode": "none" },
+      "state": {
+        "lastRunAtMs": 1740891600000,
+        "lastStatus": "ok",
+        "lastDurationMs": 45000,
+        "consecutiveErrors": 0
+      }
     },
     {
-      "schedule": "0 22 * * 5",
-      "agent": "writer",
-      "task": "Generate weekly content performance report",
+      "id": "job_weeklyreport_01",
+      "agentId": "writer",
+      "name": "Generate weekly content performance report",
       "enabled": false,
-      "deleteAfterRun": true
+      "schedule": { "kind": "cron", "expr": "0 22 * * 5" },
+      "sessionTarget": "cron:weeklyreport",
+      "wakeMode": "scheduled",
+      "payload": { "kind": "message", "message": "Generate weekly content performance report" },
+      "delivery": { "mode": "none" },
+      "state": null
     }
   ]
 }
