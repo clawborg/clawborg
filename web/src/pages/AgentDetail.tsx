@@ -10,7 +10,9 @@ import {
   XCircle,
   Edit3,
   Eye,
+  Code2,
 } from "lucide-react";
+import { marked } from "marked";
 import { fetchAgent, fetchFile, updateFile } from "@/api/client";
 import type { AgentDetail as AgentDetailType } from "@/lib/types";
 import PageLayout from "@/components/PageLayout";
@@ -36,6 +38,7 @@ export default function AgentDetail() {
   const [fileContent, setFileContent] = useState("");
   const [editContent, setEditContent] = useState("");
   const [editing, setEditing] = useState(false);
+  const [viewMode, setViewMode] = useState<"preview" | "code">("preview");
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -75,6 +78,7 @@ export default function AgentDetail() {
   useEffect(() => {
     if (!id || !activeFile) return;
     setEditing(false);
+    setViewMode("preview");
     fetchFile(id, activeFile)
       .then((data) => {
         setFileContent(data.content);
@@ -85,6 +89,12 @@ export default function AgentDetail() {
         setEditContent("");
       });
   }, [id, activeFile]);
+
+  // Parsed markdown HTML (only computed when in preview mode for a .md file)
+  const previewHtml = useMemo(() => {
+    if (!fileContent || !activeFile?.endsWith(".md")) return null;
+    return marked.parse(fileContent) as string;
+  }, [fileContent, activeFile]);
 
   const handleSave = async () => {
     if (!id || !activeFile) return;
@@ -238,7 +248,32 @@ export default function AgentDetail() {
                   </span>
                 )}
               </span>
-              <div className="flex gap-2">
+              <div className="flex items-center gap-2">
+                {/* Preview / Code toggle — shown when viewing a .md file */}
+                {isEditable && !editing && (
+                  <div className="flex rounded border border-gray-700 overflow-hidden text-xs">
+                    <button
+                      onClick={() => setViewMode("preview")}
+                      className={`flex items-center gap-1 px-2.5 py-1 transition-colors ${
+                        viewMode === "preview"
+                          ? "bg-gray-700 text-gray-100"
+                          : "bg-gray-900 text-gray-500 hover:text-gray-300"
+                      }`}
+                    >
+                      <Eye size={11} /> Preview
+                    </button>
+                    <button
+                      onClick={() => setViewMode("code")}
+                      className={`flex items-center gap-1 px-2.5 py-1 border-l border-gray-700 transition-colors ${
+                        viewMode === "code"
+                          ? "bg-gray-700 text-gray-100"
+                          : "bg-gray-900 text-gray-500 hover:text-gray-300"
+                      }`}
+                    >
+                      <Code2 size={11} /> Code
+                    </button>
+                  </div>
+                )}
                 {isEditable && !editing && (
                   <button
                     onClick={() => setEditing(true)}
@@ -276,6 +311,11 @@ export default function AgentDetail() {
                 onChange={(e) => setEditContent(e.target.value)}
                 className="w-full h-96 p-4 bg-gray-950 text-gray-200 font-mono text-sm resize-none focus:outline-none"
                 spellCheck={false}
+              />
+            ) : viewMode === "preview" && previewHtml ? (
+              <div
+                className="md-prose p-5 overflow-auto max-h-[32rem] text-sm"
+                dangerouslySetInnerHTML={{ __html: previewHtml }}
               />
             ) : (
               <pre className="p-4 text-sm text-gray-300 font-mono whitespace-pre-wrap overflow-auto max-h-[32rem]">

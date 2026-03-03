@@ -7,6 +7,48 @@ body {
     Ubuntu, Cantarell, sans-serif;
 }
 
+/* Markdown preview — dark theme prose styles */
+.md-prose { color: #d1d5db; line-height: 1.7; }
+.md-prose h1, .md-prose h2, .md-prose h3,
+.md-prose h4, .md-prose h5, .md-prose h6 {
+  color: #f3f4f6; font-weight: 600; margin: 1.25em 0 0.5em;
+}
+.md-prose h1 { font-size: 1.5rem; border-bottom: 1px solid #374151; padding-bottom: 0.3em; }
+.md-prose h2 { font-size: 1.25rem; border-bottom: 1px solid #1f2937; padding-bottom: 0.2em; }
+.md-prose h3 { font-size: 1.1rem; }
+.md-prose h4, .md-prose h5, .md-prose h6 { font-size: 1rem; color: #9ca3af; }
+.md-prose p { margin: 0.75em 0; }
+.md-prose a { color: #60a5fa; text-decoration: underline; }
+.md-prose a:hover { color: #93c5fd; }
+.md-prose strong { color: #f9fafb; font-weight: 600; }
+.md-prose em { color: #e5e7eb; font-style: italic; }
+.md-prose ul { list-style: disc; padding-left: 1.5em; margin: 0.75em 0; }
+.md-prose ol { list-style: decimal; padding-left: 1.5em; margin: 0.75em 0; }
+.md-prose li { margin: 0.25em 0; }
+.md-prose blockquote {
+  border-left: 3px solid #4b5563; padding: 0.25em 1em;
+  margin: 0.75em 0; color: #9ca3af; background: #111827; border-radius: 0 4px 4px 0;
+}
+.md-prose code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85em; background: #1f2937;
+  color: #a5f3fc; padding: 0.15em 0.4em; border-radius: 4px;
+}
+.md-prose pre {
+  background: #111827; border: 1px solid #1f2937; border-radius: 6px;
+  padding: 1em; margin: 0.75em 0; overflow-x: auto;
+}
+.md-prose pre code {
+  background: none; color: #d1d5db; padding: 0; font-size: 0.85em;
+}
+.md-prose hr { border: none; border-top: 1px solid #374151; margin: 1.5em 0; }
+.md-prose table { border-collapse: collapse; width: 100%; margin: 0.75em 0; }
+.md-prose th { background: #1f2937; color: #f3f4f6; font-weight: 600; }
+.md-prose th, .md-prose td {
+  border: 1px solid #374151; padding: 0.4em 0.75em; text-align: left;
+}
+.md-prose tr:nth-child(even) { background: #111827; }
+
 /* Hide scrollbar for file tabs */
 .scrollbar-none {
   -ms-overflow-style: none;
