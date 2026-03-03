@@ -80,7 +80,7 @@ pub async fn start_watching(
 
 /// Reload sessions for a single agent into the cache.
 async fn reload_agent_sessions(path: &Path, agent_id: &str, cache: &AppCache) {
-    match std::fs::read_to_string(path) {
+    match tokio::fs::read_to_string(path).await {
         Ok(content) => match serde_json::from_str::<HashMap<String, SessionEntry>>(&content) {
             Ok(map) => {
                 let mut c = cache.write().await;
@@ -104,7 +104,7 @@ async fn reload_agent_sessions(path: &Path, agent_id: &str, cache: &AppCache) {
 
 /// Reload cron jobs from disk into the cache.
 async fn reload_cron_jobs(path: &Path, cache: &AppCache) {
-    match std::fs::read_to_string(path) {
+    match tokio::fs::read_to_string(path).await {
         Ok(content) => match serde_json::from_str::<CronJobsFile>(&content) {
             Ok(file) => {
                 let count = file.jobs.len();
