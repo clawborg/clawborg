@@ -10,15 +10,6 @@ readme.workspace = true
 keywords.workspace = true
 categories.workspace = true
 
-# web/dist contains the pre-built React frontend embedded via rust-embed.
-# It is not tracked in git (build artifact) so must be listed explicitly
-# for cargo to include it in the crates.io tarball.
-include = [
-    "/src/**/*.rs",
-    "/web/dist/**",
-    "Cargo.toml",
-]
-
 [[bin]]
 name = "clawborg"
 path = "src/main.rs"
