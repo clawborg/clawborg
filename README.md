@@ -53,12 +53,20 @@ ClawBorg is a **read-only observer** by default. It never modifies your OpenClaw
 ## 🚀 Quick Start
 
 ```bash
-# Install
-cargo install clawborg
+# Install from source
+cargo install --git https://github.com/clawborg/clawborg
 
 # Run (auto-reads ~/.openclaw/)
 clawborg
 # → open http://localhost:3104
+```
+
+```bash
+# Or clone and build locally
+git clone https://github.com/clawborg/clawborg
+cd clawborg && cd web && pnpm install && pnpm build && cd ..
+cargo build --release
+./target/release/clawborg
 ```
 
 ```bash
