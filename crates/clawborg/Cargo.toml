@@ -48,6 +48,7 @@ chrono = { version = "0.4", features = ["serde"] }
 glob = "0.3"
 dirs = "6"
 uuid = { version = "1", features = ["v4"] }
+libc = "0.2"
 
 # WebSocket
 futures = "0.3"
