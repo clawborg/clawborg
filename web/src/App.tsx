@@ -113,7 +113,7 @@ export default function App() {
               <img src="/logo-128.png" alt="ClawBorg" className="w-8 h-8 rounded" />
               <span>ClawBorg</span>
             </h1>
-            <p className="text-xs text-gray-500 mt-1">v0.2 · Agent Fleet Dashboard</p>
+            <p className="text-xs text-gray-500 mt-1">v0.2.2 · Agent Fleet Dashboard</p>
           </div>
           <button
             onClick={() => setSidebarOpen(false)}

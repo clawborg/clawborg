@@ -204,11 +204,13 @@ fn pricing(model: &str, provider: &str) -> (f64, f64) {
 }
 
 /// Build a display key combining provider and model for the model breakdown table.
+/// Keys are lowercased and trimmed so "Kimi-K2.5" and "kimi-k2.5" merge correctly.
 fn model_display_key(model: Option<&str>, provider: Option<&str>) -> String {
+    let norm = |s: &str| s.trim().to_ascii_lowercase();
     match (provider, model) {
-        (Some(p), Some(m)) => format!("{p}/{m}"),
-        (None, Some(m)) => m.to_string(),
-        (Some(p), None) => p.to_string(),
+        (Some(p), Some(m)) => format!("{}/{}", norm(p), norm(m)),
+        (None, Some(m)) => norm(m),
+        (Some(p), None) => norm(p),
         (None, None) => "unknown".to_string(),
     }
 }

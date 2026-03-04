@@ -35,9 +35,9 @@ function CostBar({ value, max, color }: { value: number; max: number; color: str
   );
 }
 
-/* ─── Daily Trend Chart ─── */
+/* ─── Cost Trend Chart ─── */
 
-type ViewMode = "daily" | "weekly";
+type ViewMode = "daily" | "weekly" | "monthly";
 
 interface ChartBar {
   label: string;
@@ -102,26 +102,54 @@ function toWeeklyBars(data: DailyCost[]): ChartBar[] {
     .map(([, v]) => v);
 }
 
-const CHART_H = 180;
+function toMonthlyBars(data: DailyCost[]): ChartBar[] {
+  const monthMap = new Map<string, ChartBar>();
+  for (const d of data) {
+    const key = d.date.slice(0, 7); // "2026-03"
+    const [, m] = d.date.split("-");
+    const existing = monthMap.get(key);
+    if (existing) {
+      existing.cost += d.cost;
+      existing.tokens += d.inputTokens + d.outputTokens;
+    } else {
+      monthMap.set(key, {
+        label: MONTHS[parseInt(m) - 1],
+        tooltipLabel: `${MONTHS[parseInt(m) - 1]} ${d.date.slice(0, 4)}`,
+        cost: d.cost,
+        tokens: d.inputTokens + d.outputTokens,
+      });
+    }
+  }
+  return [...monthMap.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([, v]) => v);
+}
+
 const Y_AXIS_W = 48;
 const Y_FRACS = [0, 0.25, 0.5, 0.75, 1.0];
 
-function DailyTrendChart({ data }: { data: DailyCost[] }) {
+function CostTrendChart({ data }: { data: DailyCost[] }) {
   const [view, setView] = useState<ViewMode>("daily");
   const [hovered, setHovered] = useState<number | null>(null);
 
-  const bars = view === "daily" ? toDailyBars(data) : toWeeklyBars(data);
+  const bars =
+    view === "daily"
+      ? toDailyBars(data)
+      : view === "weekly"
+      ? toWeeklyBars(data)
+      : toMonthlyBars(data);
+
   const maxCost = bars.length > 0 ? Math.max(...bars.map((b) => b.cost), 0.01) : 0.01;
   const labelEvery = bars.length <= 10 ? 1 : bars.length <= 20 ? 2 : 5;
   const hoveredBar = hovered !== null ? bars[hovered] : null;
 
   return (
-    <div>
+    <div className="flex flex-col flex-1 min-h-0">
       {/* Header: title + view toggle */}
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-medium text-gray-300">Daily Cost Trend</h3>
+      <div className="flex items-center justify-between mb-4 shrink-0">
+        <h3 className="text-sm font-medium text-gray-300">Cost Trend</h3>
         <div className="flex rounded border border-gray-700 overflow-hidden text-xs">
-          {(["daily", "weekly"] as ViewMode[]).map((v) => (
+          {(["daily", "weekly", "monthly"] as ViewMode[]).map((v) => (
             <button
               key={v}
               onClick={() => setView(v)}
@@ -138,25 +166,27 @@ function DailyTrendChart({ data }: { data: DailyCost[] }) {
       </div>
 
       {bars.length === 0 ? (
-        <div className="text-gray-500 text-sm py-8 text-center">No data yet</div>
+        <div className="flex-1 flex items-center justify-center text-gray-500 text-sm">
+          No data yet
+        </div>
       ) : (
-        <div className="flex items-start gap-2">
-          {/* Y-axis labels */}
-          <div
-            className="flex flex-col justify-between text-right shrink-0"
-            style={{ width: Y_AXIS_W, height: CHART_H }}
-          >
-            {[...Y_FRACS].reverse().map((f) => (
-              <span key={f} className="text-xs text-gray-600 leading-none">
-                {fmtYAxis(maxCost * f)}
-              </span>
-            ))}
-          </div>
+        <div className="flex flex-col flex-1 min-h-0">
+          {/* Y-axis + bars row */}
+          <div className="flex gap-2 items-stretch flex-1 min-h-0">
+            {/* Y-axis labels */}
+            <div
+              className="flex flex-col justify-between text-right shrink-0"
+              style={{ width: Y_AXIS_W }}
+            >
+              {[...Y_FRACS].reverse().map((f) => (
+                <span key={f} className="text-xs text-gray-600 leading-none">
+                  {fmtYAxis(maxCost * f)}
+                </span>
+              ))}
+            </div>
 
-          {/* Bars + x-axis */}
-          <div className="flex-1 min-w-0">
             {/* Bar area */}
-            <div className="relative" style={{ height: CHART_H }}>
+            <div className="relative flex-1 min-h-[120px]">
               {/* Horizontal grid lines */}
               {Y_FRACS.slice(1).map((f) => (
                 <div
@@ -205,17 +235,20 @@ function DailyTrendChart({ data }: { data: DailyCost[] }) {
                 </div>
               )}
             </div>
+          </div>
 
-            {/* X-axis labels */}
-            <div className="flex gap-px mt-1.5">
-              {bars.map((bar, i) => (
-                <div key={i} className="flex-1 overflow-hidden text-center">
-                  {(i % labelEvery === 0 || i === bars.length - 1) && (
-                    <span className="text-xs text-gray-600 block truncate">{bar.label}</span>
-                  )}
-                </div>
-              ))}
-            </div>
+          {/* X-axis labels — left-padded to align with the bar area */}
+          <div
+            className="flex gap-px mt-1.5 shrink-0"
+            style={{ paddingLeft: Y_AXIS_W + 8 }}
+          >
+            {bars.map((bar, i) => (
+              <div key={i} className="flex-1 overflow-hidden text-center">
+                {(i % labelEvery === 0 || i === bars.length - 1) && (
+                  <span className="text-xs text-gray-600 block truncate">{bar.label}</span>
+                )}
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -262,8 +295,11 @@ export default function Usage() {
     usage.totalOutputTokens +
     usage.totalCacheReadTokens +
     usage.totalCacheWriteTokens;
-  const maxModelCost = Math.max(...usage.byModel.map((m) => m.cost), 0.01);
-  const maxAgentCost = Math.max(...usage.byAgent.map((a) => a.cost), 0.01);
+
+  // Filter out zero-cost models (unknown/missing model data) — not useful to display
+  const visibleModels = usage.byModel.filter((m) => m.cost > 0);
+  const maxModelCost = visibleModels.reduce((max, m) => Math.max(max, m.cost), 0) || 0.01;
+  const maxAgentCost = usage.byAgent.reduce((max, a) => Math.max(max, a.cost), 0) || 0.01;
 
   return (
     <PageLayout
@@ -303,19 +339,19 @@ export default function Usage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        {/* Daily Cost Trend */}
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-          <DailyTrendChart data={usage.dailyTrend} />
+        {/* Cost Trend — flex flex-col so chart can fill the card height */}
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex flex-col">
+          <CostTrendChart data={usage.dailyTrend} />
         </div>
 
         {/* Per-Model Breakdown */}
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
           <h3 className="text-sm font-medium text-gray-300 mb-4">Cost by Model</h3>
-          {usage.byModel.length === 0 ? (
+          {visibleModels.length === 0 ? (
             <div className="text-gray-500 text-sm py-4">No model data</div>
           ) : (
             <div className="space-y-3">
-              {usage.byModel.map((m) => (
+              {visibleModels.map((m) => (
                 <div key={m.model}>
                   <div className="flex items-center justify-between text-sm mb-1">
                     <span className="text-gray-300 font-mono text-xs truncate max-w-48">
@@ -327,7 +363,7 @@ export default function Usage() {
                   <div className="flex gap-3 text-xs text-gray-500 mt-1">
                     <span>{fmtTokens(m.inputTokens)} in</span>
                     <span>{fmtTokens(m.outputTokens)} out</span>
-                    <span>{m.turnCount} turns</span>
+                    <span>{m.turnCount} {m.turnCount === 1 ? "turn" : "turns"}</span>
                   </div>
                 </div>
               ))}
