@@ -28,6 +28,8 @@ pub struct ServerConfig {
     pub openclaw_dir: PathBuf,
     pub watch_enabled: bool,
     pub readonly: bool,
+    /// Show startup animation steps (foreground mode only; false for daemon).
+    pub animate: bool,
 }
 
 pub async fn run(config: ServerConfig) -> anyhow::Result<()> {
@@ -35,12 +37,18 @@ pub async fn run(config: ServerConfig) -> anyhow::Result<()> {
     let clawborg_config = crate::clawborg_config::load();
 
     // Load initial cache from disk
+    if config.animate {
+        crate::ui::startup_step_begin("Building session cache");
+    }
     let initial_cache = {
         let agents = crate::openclaw::config::read_config(&config.openclaw_dir)
             .map(|cfg| crate::openclaw::config::resolve_agents(&cfg, &config.openclaw_dir))
             .unwrap_or_default();
         cache::load_cache(&agents, &config.openclaw_dir)
     };
+    if config.animate {
+        crate::ui::startup_step_finish_ok("Building session cache", "");
+    }
     let app_cache = Arc::new(RwLock::new(initial_cache));
 
     let state = AppState {
@@ -53,6 +61,9 @@ pub async fn run(config: ServerConfig) -> anyhow::Result<()> {
 
     // Start file watcher if enabled
     if config.watch_enabled {
+        if config.animate {
+            crate::ui::startup_step_begin("Starting file watcher");
+        }
         let watcher_dir = config.openclaw_dir.clone();
         let watcher_tx = file_events_tx.clone();
         let watcher_cache = app_cache.clone();
@@ -61,7 +72,14 @@ pub async fn run(config: ServerConfig) -> anyhow::Result<()> {
                 tracing::error!("File watcher error: {e}");
             }
         });
+        if config.animate {
+            crate::ui::startup_step_finish_ok("Starting file watcher", "");
+        }
         tracing::info!("👁️ File watcher started");
+    }
+
+    if config.animate {
+        crate::ui::startup_ready(config.port);
     }
 
     // Build API router
