@@ -73,6 +73,30 @@ pub fn generate_alerts(
     }
 
     // ── Health alerts ──
+
+    // Aggregate all warning-state agents into one alert
+    let warning_ids: Vec<&str> = health_report
+        .agents
+        .iter()
+        .filter(|a| matches!(a.status, HealthStatus::Warning))
+        .map(|a| a.agent_id.as_str())
+        .collect();
+    if !warning_ids.is_empty() {
+        let count = warning_ids.len();
+        alerts.push(Alert {
+            id: "health-warning-agents".to_string(),
+            severity: AlertSeverity::Warning,
+            category: "health".to_string(),
+            title: format!(
+                "{} agent{} in warning state",
+                count,
+                if count == 1 { "" } else { "s" }
+            ),
+            message: warning_ids.join(", "),
+            timestamp: now.clone(),
+        });
+    }
+
     for agent_health in &health_report.agents {
         if matches!(agent_health.status, HealthStatus::Critical) {
             let critical_count = agent_health
