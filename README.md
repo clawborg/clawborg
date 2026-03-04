@@ -1,137 +1,181 @@
-# <img src="assets/logo.png" width="32" height="32" alt="ClawBorg" /> ClawBorg
+<div align="center">
 
-**Dashboard for OpenClaw AI agent fleets.**
+<img src="assets/logo.png" width="72" alt="ClawBorg" />
 
-ClawBorg gives you visibility into your [OpenClaw](https://openclaw.ai) installation — agents, workspaces, sessions, health, and config — from a single local dashboard.
+```
+  ██████╗██╗      █████╗ ██╗    ██╗██████╗  ██████╗ ██████╗  ██████╗
+ ██╔════╝██║     ██╔══██╗██║    ██║██╔══██╗██╔═══██╗██╔══██╗██╔════╝
+ ██║     ██║     ███████║██║ █╗ ██║██████╔╝██║   ██║██████╔╝██║  ███╗
+ ██║     ██║     ██╔══██║██║███╗██║██╔══██╗██║   ██║██╔══██╗██║   ██║
+ ╚██████╗███████╗██║  ██║╚███╔███╔╝██████╔╝╚██████╔╝██║  ██║╚██████╔╝
+  ╚═════╝╚══════╝╚═╝  ╚═╝ ╚══╝╚══╝ ╚═════╝  ╚═════╝ ╚═╝  ╚═╝ ╚═════╝
+```
 
-> **Status:** v0.2.1 released. See [CHANGELOG.md](./CHANGELOG.md) for details.
+**The fast, single-binary dashboard for OpenClaw AI agent fleets.**
 
-<p align="center">
-  <img src="assets/screenshot-dashboard.png" width="800" alt="Agent Fleet Dashboard" />
-</p>
+[![Release](https://img.shields.io/github/v/release/clawborg/clawborg)](https://github.com/clawborg/clawborg/releases)
+[![License](https://img.shields.io/github/license/clawborg/clawborg)](LICENSE)
+[![Stars](https://img.shields.io/github/stars/clawborg/clawborg)](https://github.com/clawborg/clawborg/stargazers)
+[![Crates.io](https://img.shields.io/crates/v/clawborg)](https://crates.io/crates/clawborg)
+[![Rust](https://img.shields.io/badge/rust-1.75%2B-orange)](https://www.rust-lang.org)
+[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-blue)](#)
 
-<details>
-<summary>More screenshots</summary>
+[Website](https://clawborg.dev) · [Documentation](https://clawborg.dev/docs) · [Changelog](CHANGELOG.md) · [Contributing](CONTRIBUTING.md)
 
-**Usage & Cost** — per-model and per-agent cost breakdown, token tracking
-<img src="assets/screenshot-usage.png" width="800" alt="Usage & Cost Dashboard" />
+<!-- TODO: add screenshot -->
+<img src="assets/screenshot-dashboard.png" width="860" alt="ClawBorg — Agent Fleet Dashboard" />
 
-**Cron Jobs** — schedule monitoring, overdue detection, run cost tracking
-<img src="assets/screenshot-crons.png" width="800" alt="Cron Job Monitor" />
+</div>
 
-**Agent Detail** — workspace file viewer, inline editor, task queue status
-<img src="assets/screenshot-agent-detail.png" width="800" alt="Agent Detail View" />
+---
 
-</details>
+## What is ClawBorg?
 
-## Features
+ClawBorg is a local web dashboard that gives you full visibility into your [OpenClaw](https://openclaw.ai) AI agent fleet. Point it at your `~/.openclaw/` directory and instantly see every agent's health, cost, sessions, and tasks — no config required.
 
-### v0.2 — The One You Ship
-- **Cost & Token Dashboard** — today/weekly/all-time spend, per-model and per-agent breakdown, daily trend chart, bloated session warnings
-- **Cron Job Monitor** — schedule viewer, last/next run, status detection (ok/overdue/disabled)
-- **Smart Alerts Banner** — persistent banner surfacing high cost, overdue crons, health issues
-- **Single Binary Distribution** — React frontend embedded in Rust binary via rust-embed. No Node.js needed.
+It ships as a **single binary**. The React frontend is compiled into the Rust binary via `rust-embed`, so there's nothing to install, no Docker, and no database. Run `clawborg` and open your browser.
 
-### v0.1 — Foundation
-- **Agent overview** — auto-discovers agents from `openclaw.json`
-- **Workspace viewer** — browse all files in each agent's workspace
-- **Inline editor** — edit `.md` files (AGENTS.md, SOUL.md, etc.) directly
-- **Health audit** — detects missing files, empty instructions, stale tasks
-- **Session monitor** — view active/idle/stale sessions with token counts
-- **Config viewer** — redacted view of your OpenClaw config
-- **Real-time updates** — WebSocket file watching for live changes
-- **CLI health check** — `clawborg health` for quick terminal diagnostics
+ClawBorg is a **read-only observer** by default. It never modifies your OpenClaw config or interferes with running agents. Opt-in write operations (editing `.md` files) create automatic backups.
 
-## How it works
+## ✨ Features
 
-ClawBorg is a **read-only observer** of your OpenClaw installation. It reads:
+| | Feature | Description |
+|---|---|---|
+| 🤖 | **Agent Fleet Overview** | Auto-discovers all agents from `openclaw.json`, shows health, workspace status, session count |
+| 💸 | **Usage & Cost Dashboard** | Daily/weekly/monthly cost trends, per-model and per-agent breakdown, cache token tracking |
+| 📋 | **Session Browser** | All sessions across all agents, cost per session, status detection, transcript links |
+| ⏰ | **Cron Job Monitor** | Schedule viewer, last/next run times, overdue detection, run cost tracking |
+| 🗂 | **File Browser** | Explore any agent's workspace, inline markdown preview and editor |
+| 🚨 | **Smart Alerts** | Persistent banner for high cost, overdue crons, missing health files, agent warnings |
+| ⚡ | **Real-time Updates** | WebSocket file watching — dashboard refreshes as agents write files |
+| 📦 | **Single Binary** | Frontend embedded in Rust binary — `cargo install clawborg` and you're done |
+| 🖥 | **Daemon Mode** | `clawborg start` / `stop` / `log` for background operation |
 
-- `~/.openclaw/openclaw.json` — discovers agents and their workspace paths
-- Agent workspaces — scans all `.md` files (auto-discovered, not hardcoded)
-- `~/.openclaw/agents/*/sessions/*.jsonl` — session transcripts
-- Optional: `tasks/` directories if your agents use file-based task queues
-
-ClawBorg does **not** modify your OpenClaw config or interfere with the gateway. Write operations (editing `.md` files) are opt-in and create auto-backups.
-
-## Quick start
+## 🚀 Quick Start
 
 ```bash
 # Install
 cargo install clawborg
 
-# Run (auto-detects ~/.openclaw/)
+# Run (auto-reads ~/.openclaw/)
 clawborg
-
-# Or point to a specific directory
-clawborg --dir /path/to/.openclaw
-
-# CLI health check
-clawborg health
-
-# List discovered agents
-clawborg agents
+# → open http://localhost:3104
 ```
-
-## Compatibility
-
-ClawBorg supports any OpenClaw configuration:
-
-| Setup | Config pattern | Supported |
-|-------|---------------|-----------|
-| Single agent | `agent.workspace` or `agents.defaults.workspace` | ✅ |
-| Multi-agent | `agents.list[]` with per-agent workspaces | ✅ |
-| Standard files | AGENTS.md, SOUL.md, IDENTITY.md, USER.md, TOOLS.md | ✅ |
-| Custom files | Any `.md` files in workspace root | ✅ (auto-discovered) |
-| JSONL sessions | `~/.openclaw/agents/<id>/sessions/*.jsonl` | ✅ |
-| Task queues | `<workspace>/tasks/{pending,approved,done}/` | ✅ (optional) |
-| Skills | `<workspace>/skills/` | ✅ |
-| Memory | `memory/YYYY-MM-DD.md` + `MEMORY.md` | ✅ |
-
-## Development
 
 ```bash
-# Clone
-git clone https://github.com/clawborg/clawborg.git
-cd clawborg
+# Or run as a background daemon
+clawborg start
 
-# Run with mock fixtures (no OpenClaw install needed)
-cargo run -- --dir ./fixtures/mock-openclaw
+# Follow live log output
+clawborg log -f
 
-# Frontend dev
-cd web && pnpm install && pnpm dev
+# Stop the daemon
+clawborg stop
 ```
 
-## Architecture
+```bash
+# Point to a custom OpenClaw directory
+clawborg --dir /path/to/.openclaw
 
-```
-clawborg
-├── crates/clawborg/       # Rust backend (Axum)
-│   └── src/
-│       ├── main.rs         # CLI + server startup
-│       ├── openclaw/       # Config parsing, workspace reader, sessions
-│       ├── routes/         # REST API handlers
-│       ├── server.rs       # Axum server setup
-│       ├── watcher.rs      # Filesystem watcher (notify)
-│       └── ws.rs           # WebSocket for real-time events
-├── web/                    # React frontend (Vite + Tailwind)
-└── fixtures/               # Mock data for development
+# Read-only mode (disables file editing)
+clawborg --readonly
+
+# Different port
+clawborg --port 8080
 ```
 
-## Configuration
+## 📸 Screenshots
+
+<details>
+<summary>Agent Fleet Dashboard</summary>
+
+<img src="assets/screenshot-dashboard.png" width="860" alt="Agent Fleet Dashboard" />
+</details>
+
+<details>
+<summary>Usage & Cost</summary>
+
+<img src="assets/screenshot-usage.png" width="860" alt="Usage & Cost Dashboard" />
+</details>
+
+<details>
+<summary>Cron Job Monitor</summary>
+
+<img src="assets/screenshot-crons.png" width="860" alt="Cron Job Monitor" />
+</details>
+
+<details>
+<summary>Agent Detail & File Browser</summary>
+
+<img src="assets/screenshot-agent-detail.png" width="860" alt="Agent Detail View" />
+</details>
+
+## ⚙️ Configuration
+
+ClawBorg reads your OpenClaw config (`~/.openclaw/openclaw.json`) and never modifies it. Its own settings live in `~/.clawborg/config.toml`:
+
+```toml
+[alerts]
+# Daily spend in USD that triggers a critical alert (red banner)
+dailySpendThreshold = 10.0
+
+# Daily spend that triggers a warning alert (yellow banner)
+dailySpendWarning = 5.0
+```
+
+**CLI flags:**
 
 | Flag | Env var | Default | Description |
 |------|---------|---------|-------------|
 | `--dir` | `OPENCLAW_DIR` | `~/.openclaw` | OpenClaw directory path |
 | `--port` | — | `3104` | Dashboard port |
 | `--readonly` | — | `false` | Disable write operations |
-| `--no-watch` | — | `false` | Disable file system watching |
+| `--no-watch` | — | `false` | Disable filesystem watching |
 
-## License
+## 🖥 CLI Reference
 
-AGPL-3.0 — see [LICENSE](LICENSE).
+| Command | Description |
+|---------|-------------|
+| `clawborg` | Run dashboard in foreground |
+| `clawborg start` | Start as background daemon |
+| `clawborg stop` | Stop the running daemon |
+| `clawborg log` | Show last 50 log lines |
+| `clawborg log -f` | Follow log output in real time |
+| `clawborg health` | Run workspace health check (CLI output) |
+| `clawborg agents` | List discovered agents and paths |
+| `clawborg --version` | Show version |
+| `clawborg help` | Show help |
 
-## Links
+## 🛠 Development
 
-- [OpenClaw](https://openclaw.ai) — the AI agent framework
-- [OpenClaw Docs](https://docs.openclaw.ai) — official documentation
-- [ClawBorg Issues](https://github.com/clawborg/clawborg/issues)
+```bash
+git clone https://github.com/clawborg/clawborg.git
+cd clawborg
+
+# Run backend with mock fixtures (no OpenClaw install needed)
+cargo run -- --dir ./fixtures/mock-openclaw
+
+# Frontend hot-reload (in a second terminal)
+cd web && pnpm install && pnpm dev
+# → Vite dev server on http://localhost:3103
+# → Backend API on http://localhost:3104
+```
+
+**Tech stack:**
+- Backend: [Rust](https://www.rust-lang.org) + [Axum](https://github.com/tokio-rs/axum) + [tokio](https://tokio.rs)
+- Frontend: [React 19](https://react.dev) + [Vite](https://vitejs.dev) + [Tailwind CSS](https://tailwindcss.com) + [shadcn/ui](https://ui.shadcn.com) + [Recharts](https://recharts.org)
+- Distribution: Single binary via [rust-embed](https://github.com/pyrossh/rust-embed)
+
+## 🗺 Roadmap
+
+- **v0.3** — Skills viewer, sub-agent tracker, dark/light theme toggle, health report export
+- **v0.4** — Plugin system, custom dashboard widgets, agent comparison view
+- **v1.0** — Stable API, Homebrew tap, Docker image, Windows support
+
+## 🤝 Contributing
+
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on branching, commit style, and how to run the test suite.
+
+## 📄 License
+
+[AGPL-3.0](LICENSE) — free to use, modify, and distribute under the same license.

@@ -5,6 +5,41 @@ All notable changes to ClawBorg will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2] - 2026-03-04
+
+### Added
+- CLI daemon subcommands: `clawborg start` (fork to background, write PID file), `clawborg stop` (SIGTERM + 5 s graceful wait), `clawborg log` (last 50 lines), `clawborg log -f` (follow mode)
+- ASCII art banner with version and project URLs shown on startup (foreground and daemon mode)
+- Animated startup sequence in foreground mode — per-step `▸ label... ✓` with real agent count and actual operation status (cache load, file watcher)
+- Braille spinner animation for `clawborg start` daemon init
+- Styled `clawborg stop` output: `▸ Stopping ClawBorg (PID: N)... ✓ stopped`
+- Daily / Weekly / Monthly toggle on the Cost Trend chart
+- Hover tooltip on Cost Trend chart bars (date, cost, session count)
+- Dashboard alert banner now surfaces agent health warnings alongside cost and cron alerts
+- Monthly cost aggregation view (groups daily data by calendar month)
+
+### Changed
+- Cost Trend chart renamed from "Daily Cost Trend" to "Cost Trend"
+- Chart fills its card container — no dead whitespace when adjacent cards are taller
+- Cost by Model: model names normalised case-insensitively (e.g. "Kimi-K2.5" and "kimi-k2.5" merge into one entry)
+- Cost by Model / Cost by Agent: progress bars are proportional to the highest-cost entry rather than fixed width
+- Cost by Model: `$0.00` / unknown model entries hidden
+- Cost by Model / Agent: pluralisation fix — "1 turn" instead of "1 turns"
+- Sidebar version label updated to v0.2.2
+- All CLI output is TTY-aware: colours and animations are suppressed when stdout is piped or redirected
+- Startup animation steps 3–4 ("Building session cache", "Starting file watcher") now reflect actual completion status, not optimistic pre-render
+
+### Fixed
+- Usage page daily / weekly / all-time cost figures now stay in sync with the selected view period
+- Total token count in Usage summary now includes `cache_read` and `cache_write` tokens
+- Cost Trend chart bars were rendering empty with real data — root cause: missing `h-full` on bar wrapper; fixed by replacing fixed `barWidth` with flex layout
+- Haiku model pricing corrected: `(0.25, 1.25)` → `(0.80, 4.00)` per million tokens
+- `calculate_cost` now accounts for `cache_write` tokens (billed at input rate) and `cache_read` tokens (billed at 10 % of input rate)
+- Systemic "Load failed" on all pages after extended runtime — root cause: `reload_agent_sessions` was awaited inline inside the `notify_rx` receive loop; rapid writes filled the 512-event channel, causing `blocking_send` to stall the FSEvents/kqueue OS thread and silently kill the watcher; concurrent write-lock waiters then starved API read-lock requests. Fixed with a pending-set + 500 ms debounce interval that decouples event receipt from disk I/O and collapses N events for the same file into one reload.
+- File watcher is now supervised: `start_watching` is restarted with exponential backoff (1 s → 60 s) if it exits for any reason (FSEvents restart, macOS sleep/wake, channel close)
+- Watcher callback changed from `blocking_send` (blocks OS thread on full channel) to `try_send` (drops event, logs warning)
+- `eprintln!` calls in `watcher.rs` and `cache.rs` replaced with `tracing::warn!` so errors are visible in both foreground and daemon log output
+
 ## [0.2.1] - 2026-03-03
 
 ### Added
