@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { fetchUsage } from "@/api/client";
-import type { UsageSummary } from "@/lib/types";
+import type { DailyCost, UsageSummary } from "@/lib/types";
 import { DollarSign, TrendingUp, Cpu, AlertTriangle } from "lucide-react";
 import PageLayout from "@/components/PageLayout";
 
@@ -35,40 +35,190 @@ function CostBar({ value, max, color }: { value: number; max: number; color: str
   );
 }
 
-/* ─── Daily Trend Sparkline ─── */
+/* ─── Daily Trend Chart ─── */
 
-function DailyTrendChart({ data }: { data: { date: string; cost: number }[] }) {
-  if (data.length === 0) {
-    return <div className="text-gray-500 text-sm py-8 text-center">No daily data yet</div>;
+type ViewMode = "daily" | "weekly";
+
+interface ChartBar {
+  label: string;
+  tooltipLabel: string;
+  cost: number;
+  tokens: number;
+}
+
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const DAYS_SHORT = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+
+function fmtDateShort(isoDate: string): string {
+  const [, m, d] = isoDate.split("-");
+  return `${MONTHS[parseInt(m) - 1]} ${parseInt(d)}`;
+}
+
+function fmtDateFull(isoDate: string): string {
+  const dt = new Date(isoDate + "T00:00:00Z");
+  return `${DAYS_SHORT[dt.getUTCDay()]}, ${MONTHS[dt.getUTCMonth()]} ${dt.getUTCDate()}`;
+}
+
+function fmtYAxis(n: number): string {
+  if (n === 0) return "$0";
+  if (n >= 10) return `$${n.toFixed(0)}`;
+  if (n >= 1) return `$${n.toFixed(1)}`;
+  if (n >= 0.1) return `$${n.toFixed(2)}`;
+  return `$${n.toFixed(3)}`;
+}
+
+function toDailyBars(data: DailyCost[]): ChartBar[] {
+  return data.map((d) => ({
+    label: d.date.slice(5).replace("-", "/"),
+    tooltipLabel: fmtDateFull(d.date),
+    cost: d.cost,
+    tokens: d.inputTokens + d.outputTokens,
+  }));
+}
+
+function toWeeklyBars(data: DailyCost[]): ChartBar[] {
+  const weekMap = new Map<string, ChartBar>();
+  for (const d of data) {
+    const dt = new Date(d.date + "T00:00:00Z");
+    const daysToMon = (dt.getUTCDay() + 6) % 7;
+    const mon = new Date(dt);
+    mon.setUTCDate(dt.getUTCDate() - daysToMon);
+    const key = mon.toISOString().slice(0, 10);
+    const existing = weekMap.get(key);
+    if (existing) {
+      existing.cost += d.cost;
+      existing.tokens += d.inputTokens + d.outputTokens;
+    } else {
+      weekMap.set(key, {
+        label: key.slice(5).replace("-", "/"),
+        tooltipLabel: `Wk of ${fmtDateShort(key)}`,
+        cost: d.cost,
+        tokens: d.inputTokens + d.outputTokens,
+      });
+    }
   }
+  return [...weekMap.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([, v]) => v);
+}
 
-  const maxCost = Math.max(...data.map((d) => d.cost), 0.01);
-  const barWidth = Math.max(4, Math.min(24, Math.floor(600 / data.length) - 2));
+const CHART_H = 180;
+const Y_AXIS_W = 48;
+const Y_FRACS = [0, 0.25, 0.5, 0.75, 1.0];
+
+function DailyTrendChart({ data }: { data: DailyCost[] }) {
+  const [view, setView] = useState<ViewMode>("daily");
+  const [hovered, setHovered] = useState<number | null>(null);
+
+  const bars = view === "daily" ? toDailyBars(data) : toWeeklyBars(data);
+  const maxCost = bars.length > 0 ? Math.max(...bars.map((b) => b.cost), 0.01) : 0.01;
+  const labelEvery = bars.length <= 10 ? 1 : bars.length <= 20 ? 2 : 5;
+  const hoveredBar = hovered !== null ? bars[hovered] : null;
 
   return (
-    <div className="overflow-x-auto scrollbar-none">
-      <div className="flex items-end gap-1 h-32 min-w-fit px-1">
-        {data.map((d) => {
-          const h = Math.max(2, (d.cost / maxCost) * 100);
-          return (
-            <div key={d.date} className="h-full flex flex-col items-center justify-end group relative">
-              {/* Tooltip */}
-              <div className="absolute -top-8 hidden group-hover:block bg-gray-800 border border-gray-700 text-xs px-2 py-1 rounded whitespace-nowrap z-10">
-                {d.date}: {fmtCost(d.cost)}
+    <div>
+      {/* Header: title + view toggle */}
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-medium text-gray-300">Daily Cost Trend</h3>
+        <div className="flex rounded border border-gray-700 overflow-hidden text-xs">
+          {(["daily", "weekly"] as ViewMode[]).map((v) => (
+            <button
+              key={v}
+              onClick={() => setView(v)}
+              className={`px-2.5 py-1 transition-colors capitalize ${
+                view === v
+                  ? "bg-gray-700 text-gray-100"
+                  : "text-gray-500 hover:text-gray-300 hover:bg-gray-800"
+              }`}
+            >
+              {v}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {bars.length === 0 ? (
+        <div className="text-gray-500 text-sm py-8 text-center">No data yet</div>
+      ) : (
+        <div className="flex items-start gap-2">
+          {/* Y-axis labels */}
+          <div
+            className="flex flex-col justify-between text-right shrink-0"
+            style={{ width: Y_AXIS_W, height: CHART_H }}
+          >
+            {[...Y_FRACS].reverse().map((f) => (
+              <span key={f} className="text-xs text-gray-600 leading-none">
+                {fmtYAxis(maxCost * f)}
+              </span>
+            ))}
+          </div>
+
+          {/* Bars + x-axis */}
+          <div className="flex-1 min-w-0">
+            {/* Bar area */}
+            <div className="relative" style={{ height: CHART_H }}>
+              {/* Horizontal grid lines */}
+              {Y_FRACS.slice(1).map((f) => (
+                <div
+                  key={f}
+                  className="absolute left-0 right-0 border-t border-gray-800"
+                  style={{ top: `${(1 - f) * 100}%` }}
+                />
+              ))}
+
+              {/* Bars */}
+              <div className="absolute inset-0 flex items-end gap-px">
+                {bars.map((bar, i) => {
+                  const h = Math.max(1, (bar.cost / maxCost) * 100);
+                  return (
+                    <div
+                      key={i}
+                      className="relative flex-1 h-full flex items-end"
+                      onMouseEnter={() => setHovered(i)}
+                      onMouseLeave={() => setHovered(null)}
+                    >
+                      <div
+                        className={`w-full rounded-t-sm transition-colors ${
+                          hovered === i ? "bg-claw-400" : "bg-claw-500"
+                        }`}
+                        style={{ height: `${h}%` }}
+                      />
+                    </div>
+                  );
+                })}
               </div>
-              <div
-                className="bg-claw-500 rounded-sm hover:bg-claw-400 transition-colors"
-                style={{ width: barWidth, height: `${h}%` }}
-              />
+
+              {/* Hover tooltip */}
+              {hoveredBar !== null && hovered !== null && (
+                <div
+                  className="absolute z-20 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-xs pointer-events-none shadow-xl whitespace-nowrap"
+                  style={{
+                    bottom: `${Math.min(78, Math.max(8, (hoveredBar.cost / maxCost) * 100) + 6)}%`,
+                    ...(hovered >= bars.length * 0.6
+                      ? { right: `${Math.max(0, ((bars.length - 1 - hovered) / bars.length) * 100)}%` }
+                      : { left: `${Math.max(0, (hovered / bars.length) * 100)}%` }),
+                  }}
+                >
+                  <div className="font-medium text-gray-200 mb-0.5">{hoveredBar.tooltipLabel}</div>
+                  <div className="text-claw-400 font-bold">{fmtCost(hoveredBar.cost)}</div>
+                  <div className="text-gray-500 mt-0.5">{fmtTokens(hoveredBar.tokens)} tokens</div>
+                </div>
+              )}
             </div>
-          );
-        })}
-      </div>
-      {/* Date labels */}
-      <div className="flex justify-between text-xs text-gray-600 mt-1 px-1">
-        <span>{data[0]?.date.slice(5)}</span>
-        <span>{data[data.length - 1]?.date.slice(5)}</span>
-      </div>
+
+            {/* X-axis labels */}
+            <div className="flex gap-px mt-1.5">
+              {bars.map((bar, i) => (
+                <div key={i} className="flex-1 overflow-hidden text-center">
+                  {(i % labelEvery === 0 || i === bars.length - 1) && (
+                    <span className="text-xs text-gray-600 block truncate">{bar.label}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -155,7 +305,6 @@ export default function Usage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         {/* Daily Cost Trend */}
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-          <h3 className="text-sm font-medium text-gray-300 mb-4">Daily Cost Trend</h3>
           <DailyTrendChart data={usage.dailyTrend} />
         </div>
 
