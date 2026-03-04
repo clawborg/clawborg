@@ -18,10 +18,8 @@ use tower_http::trace::TraceLayer;
 /// Embedded frontend assets (compiled React build)
 /// In development, this folder may be empty — ClawBorg serves API only.
 /// In release, `cargo build --release` embeds the pre-built web/ dist.
-/// The dist is copied into crates/clawborg/web/dist/ before publishing
-/// so it is included in the crates.io tarball.
 #[derive(Embed)]
-#[folder = "web/dist"]
+#[folder = "../../web/dist"]
 #[prefix = ""]
 struct FrontendAssets;
 
