@@ -11,14 +11,21 @@ mod types;
 mod watcher;
 mod ws;
 
+// ─── CLI definition ───
+
 #[derive(Parser)]
-#[command(name = "clawborg", version, about = "Dashboard for OpenClaw AI agent fleets")]
+#[command(
+    name = "clawborg",
+    version,
+    about = "Dashboard for OpenClaw AI agent fleets",
+    long_about = None
+)]
 struct Cli {
     /// Port for the dashboard
     #[arg(short, long, default_value_t = 3104)]
     port: u16,
 
-    /// OpenClaw directory path
+    /// OpenClaw directory path (default: ~/.openclaw)
     #[arg(short, long, env = "OPENCLAW_DIR")]
     dir: Option<PathBuf>,
 
@@ -42,26 +49,340 @@ enum Commands {
     Agents,
     /// Print version info
     Version,
+    /// Start ClawBorg as a background daemon
+    Start,
+    /// Stop the running ClawBorg daemon
+    Stop,
+    /// View daemon log output
+    Log {
+        /// Follow log output in real time (like tail -f)
+        #[arg(short, long)]
+        follow: bool,
+    },
 }
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("clawborg=info")),
-        )
-        .init();
+// ─── Path helpers ───
 
-    let cli = Cli::parse();
+fn clawborg_dir() -> PathBuf {
+    dirs::home_dir()
+        .expect("Could not find home directory")
+        .join(".clawborg")
+}
 
-    // Resolve OpenClaw directory
-    let openclaw_dir = cli.dir.unwrap_or_else(|| {
+fn pid_file_path() -> PathBuf {
+    clawborg_dir().join("clawborg.pid")
+}
+
+fn log_file_path() -> PathBuf {
+    clawborg_dir().join("logs").join("clawborg.log")
+}
+
+fn resolve_openclaw_dir(dir: &Option<PathBuf>) -> PathBuf {
+    dir.clone().unwrap_or_else(|| {
         dirs::home_dir()
             .expect("Could not find home directory")
             .join(".openclaw")
-    });
+    })
+}
 
+// ─── PID file helpers ───
+
+fn read_pid() -> Option<u32> {
+    std::fs::read_to_string(pid_file_path())
+        .ok()
+        .and_then(|s| s.trim().parse().ok())
+}
+
+/// Check if a process is alive by sending signal 0 (no-op probe).
+fn is_process_alive(pid: u32) -> bool {
+    // kill(pid, 0) returns 0 if process exists, -1 with ESRCH if not
+    unsafe { libc::kill(pid as libc::pid_t, 0) == 0 }
+}
+
+// ─── Daemon subcommands (all sync — fork must happen before tokio threads) ───
+
+fn cmd_start(
+    port: u16,
+    openclaw_dir: PathBuf,
+    no_watch: bool,
+    readonly: bool,
+) -> anyhow::Result<()> {
+    let pid_file = pid_file_path();
+    let log_file = log_file_path();
+
+    // Validate openclaw directory before forking so errors are visible
     if !openclaw_dir.exists() {
+        eprintln!();
+        eprintln!("❌ OpenClaw directory not found: {}", openclaw_dir.display());
+        eprintln!();
+        eprintln!("  Options:");
+        eprintln!("    clawborg start --dir /path/to/.openclaw");
+        eprintln!("    export OPENCLAW_DIR=/path/to/.openclaw");
+        eprintln!();
+        std::process::exit(1);
+    }
+
+    // Check if already running
+    if let Some(existing_pid) = read_pid() {
+        if is_process_alive(existing_pid) {
+            eprintln!(
+                "ClawBorg is already running (PID: {})",
+                existing_pid
+            );
+            eprintln!("  Dashboard: http://localhost:{}", port);
+            eprintln!("  Stop with: clawborg stop");
+            std::process::exit(1);
+        }
+        // Stale PID file — remove and continue
+        let _ = std::fs::remove_file(&pid_file);
+    }
+
+    // Create log directory before forking so errors surface in the terminal
+    if let Some(log_dir) = log_file.parent() {
+        std::fs::create_dir_all(log_dir)?;
+    }
+    std::fs::create_dir_all(pid_file.parent().unwrap_or(&clawborg_dir()))?;
+
+    // Fork — MUST happen before any tokio threads are created
+    let child_pid = unsafe { libc::fork() };
+    match child_pid {
+        -1 => {
+            return Err(anyhow::anyhow!(
+                "fork() failed: {}",
+                std::io::Error::last_os_error()
+            ));
+        }
+        0 => {
+            // ── Child process ──
+            // Become session leader (detach from controlling terminal)
+            unsafe { libc::setsid() };
+
+            // Redirect stdin/stdout/stderr: stdin → /dev/null, stdout/stderr → log file
+            redirect_stdio(&log_file)?;
+
+            // Write our PID to the PID file
+            let daemon_pid = std::process::id();
+            std::fs::write(&pid_file, format!("{}\n", daemon_pid))?;
+
+            // Initialize tracing (stdout now points to log file)
+            init_tracing();
+
+            // Build and run the async runtime
+            let rt = tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build()?;
+            rt.block_on(run_server(port, openclaw_dir, no_watch, readonly, Some(pid_file)))?;
+
+            Ok(())
+        }
+        pid => {
+            // ── Parent process ──
+            println!(
+                "ClawBorg started (PID: {}) — dashboard at http://localhost:{}",
+                pid, port
+            );
+            std::process::exit(0);
+        }
+    }
+}
+
+fn cmd_stop() -> anyhow::Result<()> {
+    let pid_file = pid_file_path();
+
+    let pid = match read_pid() {
+        Some(p) => p,
+        None => {
+            println!("ClawBorg is not running");
+            return Ok(());
+        }
+    };
+
+    if !is_process_alive(pid) {
+        println!("ClawBorg is not running (removed stale PID file)");
+        let _ = std::fs::remove_file(&pid_file);
+        return Ok(());
+    }
+
+    // Send SIGTERM
+    let ret = unsafe { libc::kill(pid as libc::pid_t, libc::SIGTERM) };
+    if ret != 0 {
+        return Err(anyhow::anyhow!(
+            "kill() failed: {}",
+            std::io::Error::last_os_error()
+        ));
+    }
+
+    // Wait up to 5 seconds for graceful shutdown
+    for _ in 0..50 {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        if !is_process_alive(pid) {
+            let _ = std::fs::remove_file(&pid_file);
+            println!("ClawBorg stopped");
+            return Ok(());
+        }
+    }
+
+    eprintln!("ClawBorg (PID: {}) did not stop within 5 seconds", pid);
+    eprintln!("Force-kill with: kill -9 {}", pid);
+    std::process::exit(1);
+}
+
+fn cmd_log(follow: bool) -> anyhow::Result<()> {
+    use std::io::{Read, Seek, SeekFrom, Write};
+
+    let log_file = log_file_path();
+    if !log_file.exists() {
+        println!("No log file found.");
+        println!("Start ClawBorg with `clawborg start` to enable logging.");
+        return Ok(());
+    }
+
+    // Print last 50 lines
+    let content = std::fs::read_to_string(&log_file)?;
+    let lines: Vec<&str> = content.lines().collect();
+    let start = lines.len().saturating_sub(50);
+    for line in &lines[start..] {
+        println!("{}", line);
+    }
+
+    if !follow {
+        return Ok(());
+    }
+
+    // Follow mode: seek to current end, then poll for new bytes
+    let mut file = std::fs::File::open(&log_file)?;
+    file.seek(SeekFrom::End(0))?;
+
+    let stdout = std::io::stdout();
+    loop {
+        let mut buf = [0u8; 4096];
+        match file.read(&mut buf) {
+            Ok(0) => std::thread::sleep(std::time::Duration::from_millis(250)),
+            Ok(n) => {
+                stdout.lock().write_all(&buf[..n])?;
+                stdout.lock().flush()?;
+            }
+            Err(e) => return Err(e.into()),
+        }
+    }
+}
+
+// ─── Stdio redirection for daemon mode ───
+
+fn redirect_stdio(log_path: &std::path::Path) -> anyhow::Result<()> {
+    use std::os::unix::io::IntoRawFd;
+
+    // Open log file for appending (create if not exists)
+    let log_file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(log_path)?;
+    let log_fd = log_file.into_raw_fd();
+
+    unsafe {
+        // stdout and stderr → log file
+        libc::dup2(log_fd, libc::STDOUT_FILENO);
+        libc::dup2(log_fd, libc::STDERR_FILENO);
+        libc::close(log_fd);
+
+        // stdin → /dev/null
+        let devnull = b"/dev/null\0".as_ptr().cast::<libc::c_char>();
+        let null_fd = libc::open(devnull, libc::O_RDONLY);
+        if null_fd >= 0 {
+            libc::dup2(null_fd, libc::STDIN_FILENO);
+            libc::close(null_fd);
+        }
+    }
+
+    Ok(())
+}
+
+// ─── Shared tracing setup ───
+
+fn init_tracing() {
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| EnvFilter::new("clawborg=info")),
+        )
+        .init();
+}
+
+// ─── Async server runner (shared by foreground and daemon) ───
+
+async fn run_server(
+    port: u16,
+    openclaw_dir: PathBuf,
+    no_watch: bool,
+    readonly: bool,
+    pid_file: Option<PathBuf>,
+) -> anyhow::Result<()> {
+    let config = server::ServerConfig {
+        port,
+        openclaw_dir,
+        watch_enabled: !no_watch,
+        readonly,
+    };
+
+    tokio::select! {
+        result = server::run(config) => {
+            if let Some(ref pf) = pid_file {
+                let _ = std::fs::remove_file(pf);
+            }
+            result
+        }
+        _ = shutdown_signal() => {
+            tracing::info!("Shutting down gracefully");
+            if let Some(ref pf) = pid_file {
+                let _ = std::fs::remove_file(pf);
+            }
+            Ok(())
+        }
+    }
+}
+
+async fn shutdown_signal() {
+    use tokio::signal::unix::{signal, SignalKind};
+    let mut sigterm = match signal(SignalKind::terminate()) {
+        Ok(s) => s,
+        Err(_) => {
+            // If we can't register SIGTERM, just wait for Ctrl+C
+            tokio::signal::ctrl_c().await.ok();
+            return;
+        }
+    };
+    tokio::select! {
+        _ = tokio::signal::ctrl_c() => {},
+        _ = sigterm.recv() => {},
+    }
+}
+
+// ─── Entry point ───
+
+fn main() -> anyhow::Result<()> {
+    let cli = Cli::parse();
+
+    // Handle sync-only commands BEFORE the async runtime starts.
+    // CRITICAL: fork() is unsafe after tokio threads exist, so `start` is also
+    // handled here — fork happens inside cmd_start before the runtime is built.
+    match &cli.command {
+        Some(Commands::Stop) => return cmd_stop(),
+        Some(Commands::Log { follow }) => return cmd_log(*follow),
+        Some(Commands::Start) => {
+            let dir = resolve_openclaw_dir(&cli.dir);
+            // cmd_start: parent calls process::exit(0), child falls through to Ok(())
+            return cmd_start(cli.port, dir, cli.no_watch, cli.readonly);
+        }
+        _ => {}
+    }
+
+    // Initialize tracing for foreground / CLI commands (writes to terminal)
+    init_tracing();
+
+    let openclaw_dir = resolve_openclaw_dir(&cli.dir);
+
+    // Validate directory for commands that need it (all except Version)
+    if !openclaw_dir.exists() && !matches!(cli.command, Some(Commands::Version)) {
         eprintln!();
         eprintln!("❌ OpenClaw directory not found: {}", openclaw_dir.display());
         eprintln!();
@@ -79,6 +400,14 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("📂 OpenClaw directory: {}", openclaw_dir.display());
 
+    // Start tokio runtime for remaining commands
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()?;
+    rt.block_on(async_main(cli, openclaw_dir))
+}
+
+async fn async_main(cli: Cli, openclaw_dir: PathBuf) -> anyhow::Result<()> {
     match cli.command {
         Some(Commands::Health) => {
             let report = openclaw::health::build_health_report(&openclaw_dir)?;
@@ -86,10 +415,8 @@ async fn main() -> anyhow::Result<()> {
             Ok(())
         }
         Some(Commands::Agents) => {
-            // Print discovered agents
             let cfg = openclaw::config::read_config(&openclaw_dir)?;
             let agents = openclaw::config::resolve_agents(&cfg, &openclaw_dir);
-
             println!();
             println!("  Discovered {} agent(s):", agents.len());
             println!();
@@ -107,47 +434,41 @@ async fn main() -> anyhow::Result<()> {
             Ok(())
         }
         Some(Commands::Version) => {
-            println!("clawborg {}", env!("CARGO_PKG_VERSION"));
+            println!("clawborg v{}", env!("CARGO_PKG_VERSION"));
             Ok(())
         }
         None => {
-            // Verify config is readable before starting server
+            // Foreground server mode — identical to previous default behavior
             let cfg = openclaw::config::read_config(&openclaw_dir)?;
             let agents = openclaw::config::resolve_agents(&cfg, &openclaw_dir);
-
-            let config = server::ServerConfig {
-                port: cli.port,
-                openclaw_dir,
-                watch_enabled: !cli.no_watch,
-                readonly: cli.readonly,
-            };
 
             println!();
             println!("  🤖 ClawBorg v{}", env!("CARGO_PKG_VERSION"));
             println!("  ─────────────────────────────");
-            println!("  Dashboard:  http://localhost:{}", config.port);
-            println!("  API:        http://localhost:{}/api", config.port);
-            println!("  OpenClaw:   {}", config.openclaw_dir.display());
+            println!("  Dashboard:  http://localhost:{}", cli.port);
+            println!("  API:        http://localhost:{}/api", cli.port);
+            println!("  OpenClaw:   {}", openclaw_dir.display());
             println!("  Agents:     {} discovered", agents.len());
             println!(
                 "  Mode:       {}",
-                if config.readonly { "read-only" } else { "read-write" }
+                if cli.readonly { "read-only" } else { "read-write" }
             );
             println!(
                 "  Watching:   {}",
-                if config.watch_enabled { "on" } else { "off" }
+                if !cli.no_watch { "on" } else { "off" }
             );
             println!();
-
-            // Print agent summary
             for agent in &agents {
                 let name = agent.name.as_deref().unwrap_or(&agent.id);
                 let ws_ok = if agent.workspace_path.exists() { "✅" } else { "⚠️" };
                 println!("  {} {} → {}", ws_ok, name, agent.workspace_path.display());
             }
             println!();
-
-            server::run(config).await
+            run_server(cli.port, openclaw_dir, cli.no_watch, cli.readonly, None).await
+        }
+        // These are handled synchronously before the runtime starts
+        Some(Commands::Start) | Some(Commands::Stop) | Some(Commands::Log { .. }) => {
+            unreachable!("start/stop/log handled before async runtime")
         }
     }
 }
