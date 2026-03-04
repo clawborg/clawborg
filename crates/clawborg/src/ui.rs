@@ -43,31 +43,30 @@ pub fn print_banner(version: &str) {
 
 // ─── Foreground startup animation ────────────────────────────────────────────
 //
-// Usage pattern:
-//   let result = do_work();
-//   match result {
+// Two usage patterns:
+//
+// Pattern A — result already known (one-shot, includes 220 ms fake delay):
+//   match do_fast_work() {
 //       Ok(_) => ui::startup_step_ok("Step label", "detail"),
 //       Err(e) => { ui::startup_step_err("Step label", &e.to_string()); return Err(e); }
 //   }
 //
-// startup_step_ok  — prints begin state, sleeps 220 ms, overwrites with ✓
-// startup_step_err — prints ✗ line directly (no prior partial print assumed)
+// Pattern B — wraps real work (begin/finish, no artificial delay):
+//   ui::startup_step_begin("Step label");
+//   let result = do_real_work();
+//   match result {
+//       Ok(_) => ui::startup_step_finish_ok("Step label", "detail"),
+//       Err(e) => { ui::startup_step_finish_err("Step label", &e.to_string()); return Err(e); }
+//   }
 
+/// One-shot: print begin state, sleep 220 ms (so the user sees it), overwrite with ✓.
+/// Use when the work is already done and you just want the animation effect.
 pub fn startup_step_ok(label: &str, detail: &str) {
     if is_tty() {
-        // Print "working" state (no newline)
         print!("  {} {}...", "▸".dimmed(), label);
         let _ = std::io::stdout().flush();
         std::thread::sleep(Duration::from_millis(220));
-
-        // Overwrite with completed state; pad label to 44 chars so the ✓
-        // always clears the trailing "..." from the initial print.
-        let suffix = if detail.is_empty() {
-            "✓".green().to_string()
-        } else {
-            format!("✓  {}", detail).green().to_string()
-        };
-        println!("\r  {} {:<44}{}", "▸".dimmed(), label, suffix);
+        println!("\r  {} {:<44}{}", "▸".dimmed(), label, step_ok_suffix(detail));
     } else if detail.is_empty() {
         println!("  ▸ {}... ✓", label);
     } else {
@@ -75,11 +74,52 @@ pub fn startup_step_ok(label: &str, detail: &str) {
     }
 }
 
+/// One-shot error: print ✗ line. Use when work has already failed.
 pub fn startup_step_err(label: &str, err: &str) {
     if is_tty() {
         println!("  {} {:<44}{}", "▸".dimmed(), label, format!("✗  {}", err).red());
     } else {
         println!("  ▸ {}... ✗  {}", label, err);
+    }
+}
+
+/// Two-phase begin: print `▸ label...` and flush. Follow with `startup_step_finish_*`.
+pub fn startup_step_begin(label: &str) {
+    if is_tty() {
+        print!("  {} {}...", "▸".dimmed(), label);
+        let _ = std::io::stdout().flush();
+    } else {
+        print!("  ▸ {}...", label);
+        let _ = std::io::stdout().flush();
+    }
+}
+
+/// Two-phase finish (success): overwrite the begin line with ✓.
+pub fn startup_step_finish_ok(label: &str, detail: &str) {
+    if is_tty() {
+        println!("\r  {} {:<44}{}", "▸".dimmed(), label, step_ok_suffix(detail));
+    } else if detail.is_empty() {
+        println!(" ✓");
+    } else {
+        println!(" ✓  {}", detail);
+    }
+}
+
+/// Two-phase finish (error): overwrite the begin line with ✗.
+#[allow(dead_code)]
+pub fn startup_step_finish_err(label: &str, err: &str) {
+    if is_tty() {
+        println!("\r  {} {:<44}{}", "▸".dimmed(), label, format!("✗  {}", err).red());
+    } else {
+        println!(" ✗  {}", err);
+    }
+}
+
+fn step_ok_suffix(detail: &str) -> String {
+    if detail.is_empty() {
+        "✓".green().to_string()
+    } else {
+        format!("✓  {}", detail).green().to_string()
     }
 }
 

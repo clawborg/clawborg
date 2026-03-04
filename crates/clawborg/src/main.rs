@@ -180,7 +180,7 @@ fn cmd_start(
             let rt = tokio::runtime::Builder::new_multi_thread()
                 .enable_all()
                 .build()?;
-            rt.block_on(run_server(port, openclaw_dir, no_watch, readonly, Some(pid_file)))?;
+            rt.block_on(run_server(port, openclaw_dir, no_watch, readonly, Some(pid_file), false))?;
 
             Ok(())
         }
@@ -326,12 +326,14 @@ async fn run_server(
     no_watch: bool,
     readonly: bool,
     pid_file: Option<PathBuf>,
+    animate: bool,
 ) -> anyhow::Result<()> {
     let config = server::ServerConfig {
         port,
         openclaw_dir,
         watch_enabled: !no_watch,
         readonly,
+        animate,
     };
 
     tokio::select! {
@@ -471,15 +473,9 @@ async fn async_main(cli: Cli, openclaw_dir: PathBuf) -> anyhow::Result<()> {
                 &format!("{} discovered", agents.len()),
             );
 
-            // Steps 3-4 happen inside server::run — shown optimistically
-            ui::startup_step_ok("Building session cache", "");
-            if !cli.no_watch {
-                ui::startup_step_ok("Starting file watcher", "");
-            }
-
-            ui::startup_ready(cli.port);
-
-            run_server(cli.port, openclaw_dir, cli.no_watch, cli.readonly, None).await
+            // Steps 3-4 ("Building session cache", "Starting file watcher") are shown
+            // inside server::run() at the actual execution points.
+            run_server(cli.port, openclaw_dir, cli.no_watch, cli.readonly, None, true).await
         }
         // These are handled synchronously before the runtime starts
         Some(Commands::Start) | Some(Commands::Stop) | Some(Commands::Log { .. }) => {
