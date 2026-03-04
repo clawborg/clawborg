@@ -1,6 +1,5 @@
 <div align="center">
-
-<img src="assets/logo.png" width="72" alt="ClawBorg" />
+  <img src="assets/logo.png" alt="ClawBorg" width="120" />
 
 ```
   ██████╗██╗      █████╗ ██╗    ██╗██████╗  ██████╗ ██████╗  ██████╗
@@ -14,15 +13,14 @@
 **The fast, single-binary dashboard for OpenClaw AI agent fleets.**
 
 [![Release](https://img.shields.io/github/v/release/clawborg/clawborg)](https://github.com/clawborg/clawborg/releases)
+[![crates.io](https://img.shields.io/crates/v/clawborg)](https://crates.io/crates/clawborg)
+[![downloads](https://img.shields.io/crates/d/clawborg)](https://crates.io/crates/clawborg)
 [![License](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/clawborg/clawborg)](https://github.com/clawborg/clawborg/stargazers)
 [![Rust](https://img.shields.io/badge/rust-1.75%2B-orange)](https://www.rust-lang.org)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-blue)](#)
 
 [Website](https://clawborg.dev) · [Documentation](https://clawborg.dev/docs) · [Changelog](CHANGELOG.md) · [Contributing](CONTRIBUTING.md)
-
-<!-- TODO: add screenshot -->
-<img src="assets/screenshot-dashboard.png" width="860" alt="ClawBorg — Agent Fleet Dashboard" />
 
 </div>
 
@@ -93,29 +91,20 @@ clawborg --port 8080
 
 ## 📸 Screenshots
 
-<details>
-<summary>Agent Fleet Dashboard</summary>
+<div align="center">
+  <img src="assets/screenshot-dashboard.png" alt="Agent Fleet Dashboard" width="800" />
+  <p><em>Agent Fleet Dashboard</em></p>
+</div>
 
-<img src="assets/screenshot-dashboard.png" width="860" alt="Agent Fleet Dashboard" />
-</details>
+<div align="center">
+  <img src="assets/screenshot-usage.png" alt="Usage & Cost Tracking" width="800" />
+  <p><em>Usage & Cost Tracking</em></p>
+</div>
 
-<details>
-<summary>Usage & Cost</summary>
-
-<img src="assets/screenshot-usage.png" width="860" alt="Usage & Cost Dashboard" />
-</details>
-
-<details>
-<summary>Cron Job Monitor</summary>
-
-<img src="assets/screenshot-crons.png" width="860" alt="Cron Job Monitor" />
-</details>
-
-<details>
-<summary>Agent Detail & File Browser</summary>
-
-<img src="assets/screenshot-agent-detail.png" width="860" alt="Agent Detail View" />
-</details>
+<div align="center">
+  <img src="assets/screenshot-session.png" alt="Session Browser" width="800" />
+  <p><em>Session Browser</em></p>
+</div>
 
 ## ⚙️ Configuration
 
