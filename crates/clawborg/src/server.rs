@@ -59,7 +59,10 @@ pub async fn run(config: ServerConfig) -> anyhow::Result<()> {
         cache: app_cache.clone(),
     };
 
-    // Start file watcher if enabled
+    // Start file watcher with supervision: if start_watching exits for any
+    // reason (watcher error, FSEvents restart, channel close), re-launch it
+    // with exponential backoff up to 60 s. Without supervision, a dead watcher
+    // leaves the cache permanently stale.
     if config.watch_enabled {
         if config.animate {
             crate::ui::startup_step_begin("Starting file watcher");
@@ -68,14 +71,34 @@ pub async fn run(config: ServerConfig) -> anyhow::Result<()> {
         let watcher_tx = file_events_tx.clone();
         let watcher_cache = app_cache.clone();
         tokio::spawn(async move {
-            if let Err(e) = watcher::start_watching(watcher_dir, watcher_tx, watcher_cache).await {
-                tracing::error!("File watcher error: {e}");
+            let mut backoff = tokio::time::Duration::from_secs(1);
+            loop {
+                match watcher::start_watching(
+                    watcher_dir.clone(),
+                    watcher_tx.clone(),
+                    watcher_cache.clone(),
+                )
+                .await
+                {
+                    Ok(()) => {
+                        tracing::warn!(
+                            "File watcher exited unexpectedly; restarting in {backoff:?}"
+                        );
+                    }
+                    Err(e) => {
+                        tracing::error!(
+                            "File watcher failed: {e}; restarting in {backoff:?}"
+                        );
+                    }
+                }
+                tokio::time::sleep(backoff).await;
+                backoff = (backoff * 2).min(tokio::time::Duration::from_secs(60));
             }
         });
         if config.animate {
             crate::ui::startup_step_finish_ok("Starting file watcher", "");
         }
-        tracing::info!("👁️ File watcher started");
+        tracing::info!("👁️ File watcher started (supervised)");
     }
 
     if config.animate {

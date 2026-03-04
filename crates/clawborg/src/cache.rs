@@ -29,8 +29,8 @@ pub fn load_cache(agents: &[ResolvedAgent], openclaw_dir: &Path) -> DataCache {
                     cache.sessions.insert(agent.id.clone(), map);
                 }
                 Err(e) => {
-                    eprintln!(
-                        "[clawborg] Failed to parse sessions.json for agent {}: {e}",
+                    tracing::warn!(
+                        "Failed to parse sessions.json for agent {}: {e}",
                         agent.id
                     );
                 }
@@ -45,7 +45,7 @@ pub fn load_cache(agents: &[ResolvedAgent], openclaw_dir: &Path) -> DataCache {
                 cache.cron_jobs = file.jobs;
             }
             Err(e) => {
-                eprintln!("[clawborg] Failed to parse cron/jobs.json for cache: {e}");
+                tracing::warn!("Failed to parse cron/jobs.json for cache: {e}");
             }
         }
     }
