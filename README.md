@@ -14,9 +14,8 @@
 **The fast, single-binary dashboard for OpenClaw AI agent fleets.**
 
 [![Release](https://img.shields.io/github/v/release/clawborg/clawborg)](https://github.com/clawborg/clawborg/releases)
-[![License](https://img.shields.io/github/license/clawborg/clawborg)](LICENSE)
+[![License](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/clawborg/clawborg)](https://github.com/clawborg/clawborg/stargazers)
-[![Crates.io](https://img.shields.io/crates/v/clawborg)](https://crates.io/crates/clawborg)
 [![Rust](https://img.shields.io/badge/rust-1.75%2B-orange)](https://www.rust-lang.org)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-blue)](#)
 
@@ -54,12 +53,20 @@ ClawBorg is a **read-only observer** by default. It never modifies your OpenClaw
 ## 🚀 Quick Start
 
 ```bash
-# Install
-cargo install clawborg
+# Install from source
+cargo install --git https://github.com/clawborg/clawborg
 
 # Run (auto-reads ~/.openclaw/)
 clawborg
 # → open http://localhost:3104
+```
+
+```bash
+# Or clone and build locally
+git clone https://github.com/clawborg/clawborg
+cd clawborg && cd web && pnpm install && pnpm build && cd ..
+cargo build --release
+./target/release/clawborg
 ```
 
 ```bash
