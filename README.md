@@ -172,6 +172,14 @@ cd web && pnpm install && pnpm dev
 
 Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on branching, commit style, and how to run the test suite.
 
+## About
+
+ClawBorg is built and maintained by [Onivor](https://onivor.com), an AI-native company from Indonesia running on 1 human founder + 12 AI agents.
+
+- Website: [onivor.com](https://onivor.com)
+- Twitter/X: [@onivordigital](https://x.com/onivordigital)
+- Blog: [onivor.com/blog](https://onivor.com/blog)
+
 ## 📄 License
 
 [AGPL-3.0](LICENSE) — free to use, modify, and distribute under the same license.
